@@ -12,7 +12,9 @@ export const getLoginUrl = () => {
   }
 
   try {
-    const url = new URL("/app-auth", oauthPortalUrl);
+    // Ensure oauthPortalUrl is a valid absolute URL by adding protocol if missing
+    const baseUrl = oauthPortalUrl.startsWith('http') ? oauthPortalUrl : `https://${oauthPortalUrl}`;
+    const url = new URL("/app-auth", baseUrl);
     if (appId) {
       url.searchParams.set("appId", appId);
     }
@@ -22,7 +24,7 @@ export const getLoginUrl = () => {
 
     return url.toString();
   } catch (error) {
-    console.error("Invalid OAuth portal URL configured", error);
+    console.error("Invalid OAuth portal URL configured:", error, "URL:", oauthPortalUrl);
     return "/candidate";
   }
 };
