@@ -479,10 +479,7 @@ export async function getOrCreateConversation(candidateId: number, agencyId: num
       return existing[0];
     }
 
-    if (existing) {
-      return existing;
-    }
-
+    // No existing conversation found, create a new one
     const result = await db.insert(conversations).values({
       candidateId,
       agencyId,

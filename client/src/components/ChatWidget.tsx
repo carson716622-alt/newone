@@ -87,11 +87,24 @@ export function ChatWidget() {
   };
 
   const handleStartNew = async (agencyId: number) => {
-    if (startConversationMutation.isPending) return;
+    console.log("DEBUG: handleStartNew called with agencyId:", agencyId);
+    if (startConversationMutation.isPending) {
+      console.log("DEBUG: Mutation is already pending, skipping...");
+      return;
+    }
     try {
-      await startConversationMutation.mutateAsync({ agencyId });
+      console.log("DEBUG: Calling mutateAsync for agencyId:", agencyId);
+      const result = await startConversationMutation.mutateAsync({ agencyId });
+      console.log("DEBUG: Mutation result received:", result);
+      if (result && result.id) {
+        console.log("DEBUG: Setting selectedConversationId to:", result.id);
+        setSelectedConversationId(result.id);
+        setIsStartingNew(false);
+      } else {
+        console.warn("DEBUG: Result received but missing id:", result);
+      }
     } catch (error) {
-      console.error("Failed to start conversation:", error);
+      console.error("DEBUG: Failed to start conversation:", error);
     }
   };
 
