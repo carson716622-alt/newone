@@ -48,10 +48,10 @@ export function ChatWidget() {
     }
   );
 
-  // Start conversation mutation
-  const startConversationMutation = trpc.messaging.startConversation.useMutation({
+  // Start conversation mutation - FIXED: using correct procedure name
+  const startConversationMutation = trpc.messaging.getOrCreateConversation.useMutation({
     onSuccess: (data) => {
-      setSelectedConversationId(data.conversationId);
+      setSelectedConversationId(data.id);
       setIsStartingNew(false);
       if (currentUser?.type === "candidate") candidateQuery.refetch();
       else agencyQuery.refetch();
