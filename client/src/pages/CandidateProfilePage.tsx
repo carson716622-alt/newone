@@ -64,7 +64,7 @@ export default function CandidateProfilePage() {
       await updateProfileMutation.mutateAsync({
         bio: editingValues.bio,
         yearsOfExperience: parseInt(editingValues.yearsOfExperience) || 0,
-        skills: editingValues.skills.split(",").map((s) => s.trim()),
+        skills: editingValues.skills,
       });
       toast.success("Profile updated successfully");
       setIsEditingProfile(false);
@@ -86,8 +86,8 @@ export default function CandidateProfilePage() {
       await addExperienceMutation.mutateAsync({
         jobTitle: newExperience.jobTitle,
         department: newExperience.department,
-        startDate: new Date(newExperience.startDate),
-        endDate: newExperience.endDate ? new Date(newExperience.endDate) : null,
+        startDate: newExperience.startDate,
+        endDate: newExperience.endDate || undefined,
         description: newExperience.description,
       });
       toast.success("Experience added successfully");
@@ -127,8 +127,8 @@ export default function CandidateProfilePage() {
       await addCertMutation.mutateAsync({
         certificationName: newCert.certificationName,
         issuingOrganization: newCert.issuingOrganization,
-        issueDate: new Date(newCert.issueDate),
-        expirationDate: newCert.expirationDate ? new Date(newCert.expirationDate) : null,
+        issueDate: newCert.issueDate,
+        expirationDate: newCert.expirationDate || undefined,
       });
       toast.success("Certification added successfully");
       setNewCert({
@@ -307,12 +307,12 @@ export default function CandidateProfilePage() {
             <h3 className="text-xl font-semibold text-foreground">Skills</h3>
             {profile?.skills && profile.skills.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {profile.skills.map((skill: string, index: number) => (
+                {profile.skills.split(",").map((skill: string, index: number) => (
                   <span
                     key={index}
                     className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm"
                   >
-                    {skill}
+                    {skill.trim()}
                   </span>
                 ))}
               </div>
