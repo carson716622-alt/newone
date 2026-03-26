@@ -9,13 +9,14 @@ import { MessagingPanel } from "./MessagingPanel";
 import { formatDistanceToNow } from "date-fns";
 
 export function ChatWidget() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const currentUser = user || session;
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
 
   // Only show if user is logged in as candidate or agency
-  if (!user || (user.type !== "candidate" && user.type !== "agency")) {
+  if (!currentUser || (currentUser.type !== "candidate" && currentUser.type !== "agency")) {
     return null;
   }
 
@@ -23,7 +24,7 @@ export function ChatWidget() {
   const candidateQuery = trpc.messaging.getCandidateConversations.useQuery(
     undefined,
     { 
-      enabled: user?.type === "candidate" && isOpen,
+      enabled: currentUser?.type === "candidate" && isOpen,
       refetchInterval: 10000,
       staleTime: 5000,
     }
@@ -32,20 +33,20 @@ export function ChatWidget() {
   const agencyQuery = trpc.messaging.getAgencyConversations.useQuery(
     undefined,
     { 
-      enabled: user?.type === "agency" && isOpen,
+      enabled: currentUser?.type === "agency" && isOpen,
       refetchInterval: 10000,
       staleTime: 5000,
     }
   );
 
-  const conversations = (user?.type === "candidate" ? candidateQuery.data : agencyQuery.data) ?? [];
-  const isLoading = user?.type === "candidate" ? candidateQuery.isLoading : agencyQuery.isLoading;
+  const conversations = (currentUser?.type === "candidate" ? candidateQuery.data : agencyQuery.data) ?? [];
+  const isLoading = currentUser?.type === "candidate" ? candidateQuery.isLoading : agencyQuery.isLoading;
 
   // Get total unread count
   const unreadQuery = trpc.messaging.getUnreadCount.useQuery(
     undefined,
     { 
-      enabled: !!user,
+      enabled: !!currentUser,
       refetchInterval: 30000,
       staleTime: 10000,
     }
@@ -119,13 +120,13 @@ export function ChatWidget() {
                     ← Back
                   </Button>
                   <span className="font-medium text-xs truncate">
-                    {user.type === "candidate" ? "Agency Chat" : "Candidate Chat"}
+                    {currentUser.type === "candidate" ? "Agency Chat" : "Candidate Chat"}
                   </span>
                 </div>
                 <div className="flex-1 min-h-0">
                   <MessagingPanel 
                     conversationId={selectedConversationId} 
-                    otherUserName={user.type === "candidate" ? "Agency" : "Candidate"}
+                    otherUserName={currentUser.type === "candidate" ? "Agency" : "Candidate"}
                   />
                 </div>
               </div>
@@ -150,7 +151,7 @@ export function ChatWidget() {
                       >
                         <div className="flex justify-between items-start mb-1">
                           <span className="font-semibold text-xs text-foreground truncate">
-                            {user.type === "candidate" ? "Agency" : "Candidate"}
+                            {currentUser.type === "candidate" ? "Agency" : "Candidate"}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
                             {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })}
