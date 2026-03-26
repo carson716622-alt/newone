@@ -403,16 +403,25 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
           <Plus className="mr-2 h-4 w-4" /> Post New Opening
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[95vw] w-full lg:max-w-4xl h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10">
-        <DialogHeader className="p-6 pb-4 border-b border-white/10">
-          <DialogTitle className="text-2xl font-bold text-white">Post a New Opening</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Share a role for your agency. Fill in the details below — the listing will be reviewed by an admin before going live.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-[95vw] w-full lg:max-w-4xl h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10 flex flex-col overflow-hidden" showCloseButton={false}>
+        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
+          <div className="space-y-1">
+            <DialogTitle className="text-xl font-bold text-white">Post a New Opening</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Fill in the details below — the listing will be reviewed by an admin before going live.
+            </DialogDescription>
+          </div>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="rounded-sm p-1 opacity-70 hover:opacity-100 transition-opacity text-muted-foreground hover:text-white mt-0.5"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
 
-        <ScrollArea className="h-full max-h-[calc(90vh-160px)]">
-          <div className="p-6 space-y-6">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="px-6 py-5 space-y-6">
 
             {/* ─── SECTION 1: Basic Info ─── */}
             <SectionHeader icon={Briefcase} title="Basic Information" subtitle="Job title, location, and type" />
@@ -683,7 +692,7 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
           </div>
         </ScrollArea>
 
-        <DialogFooter className="p-5 border-t border-white/10 bg-[#0f172a]">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/10 bg-[#0f172a] shrink-0">
           <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -698,7 +707,7 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
               <><Plus className="w-4 h-4 mr-2" />Post Job</>
             )}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
