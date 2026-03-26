@@ -32,7 +32,20 @@ async function hashPassword(password: string): Promise<string> {
 
 // Compare password helper
 async function comparePassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
+  if (!hash) return false;
+
+  // Backward compatibility for legacy records that may contain plaintext passwords.
+  // New records are always stored as bcrypt hashes.
+  const isBcryptHash = hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$");
+  if (!isBcryptHash) {
+    return password === hash;
+  }
+
+  try {
+    return await bcrypt.compare(password, hash);
+  } catch {
+    return false;
+  }
 }
 
 export const appRouter = router({
