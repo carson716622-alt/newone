@@ -512,7 +512,21 @@ export async function getCandidateConversations(candidateId: number) {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     
-    return await db.select().from(conversations).where(eq(conversations.candidateId, candidateId)).orderBy(desc(conversations.lastMessageAt));
+    const results = await db
+      .select({
+        id: conversations.id,
+        candidateId: conversations.candidateId,
+        agencyId: conversations.agencyId,
+        jobPostingId: conversations.jobPostingId,
+        lastMessageAt: conversations.lastMessageAt,
+        createdAt: conversations.createdAt,
+        agencyName: agencies.departmentName,
+      })
+      .from(conversations)
+      .leftJoin(agencies, eq(conversations.agencyId, agencies.id))
+      .where(eq(conversations.candidateId, candidateId))
+      .orderBy(desc(conversations.lastMessageAt));
+    return results;
   } catch (error) {
     console.error("Error getting candidate conversations:", error);
     throw error;
@@ -524,7 +538,21 @@ export async function getAgencyConversations(agencyId: number) {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     
-    return await db.select().from(conversations).where(eq(conversations.agencyId, agencyId)).orderBy(desc(conversations.lastMessageAt));
+    const results = await db
+      .select({
+        id: conversations.id,
+        candidateId: conversations.candidateId,
+        agencyId: conversations.agencyId,
+        jobPostingId: conversations.jobPostingId,
+        lastMessageAt: conversations.lastMessageAt,
+        createdAt: conversations.createdAt,
+        candidateName: candidates.name,
+      })
+      .from(conversations)
+      .leftJoin(candidates, eq(conversations.candidateId, candidates.id))
+      .where(eq(conversations.agencyId, agencyId))
+      .orderBy(desc(conversations.lastMessageAt));
+    return results;
   } catch (error) {
     console.error("Error getting agency conversations:", error);
     throw error;

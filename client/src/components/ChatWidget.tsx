@@ -16,6 +16,7 @@ export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
+  const [selectedConversationName, setSelectedConversationName] = useState<string>("");
   const [isStartingNew, setIsStartingNew] = useState(false);
 
   // 1. Unread count query
@@ -54,7 +55,6 @@ export function ChatWidget() {
       if (data && data.id) {
         setSelectedConversationId(data.id);
         setIsStartingNew(false);
-        // Force refetch to ensure the new conversation is in the list
         if (currentUser?.type === "candidate") candidateQuery.refetch();
         else agencyQuery.refetch();
       }
@@ -73,6 +73,7 @@ export function ChatWidget() {
   useEffect(() => {
     if (!isOpen) {
       setSelectedConversationId(null);
+      setSelectedConversationName("");
       setIsStartingNew(false);
     }
   }, [isOpen]);
@@ -86,26 +87,33 @@ export function ChatWidget() {
     setIsMinimized(false);
   };
 
-  const handleStartNew = async (agencyId: number) => {
-    console.log("DEBUG: handleStartNew called with agencyId:", agencyId);
-    if (startConversationMutation.isPending) {
-      console.log("DEBUG: Mutation is already pending, skipping...");
-      return;
-    }
+  const handleStartNew = async (agencyId: number, agencyName: string) => {
+    if (startConversationMutation.isPending) return;
     try {
-      console.log("DEBUG: Calling mutateAsync for agencyId:", agencyId);
+      setSelectedConversationName(agencyName);
       const result = await startConversationMutation.mutateAsync({ agencyId });
-      console.log("DEBUG: Mutation result received:", result);
       if (result && result.id) {
-        console.log("DEBUG: Setting selectedConversationId to:", result.id);
         setSelectedConversationId(result.id);
         setIsStartingNew(false);
-      } else {
-        console.warn("DEBUG: Result received but missing id:", result);
       }
     } catch (error) {
-      console.error("DEBUG: Failed to start conversation:", error);
+      console.error("Failed to start conversation:", error);
     }
+  };
+
+  // Helper to get the display name for a conversation
+  const getConversationName = (conv: any): string => {
+    if (currentUser.type === "candidate") {
+      return conv.agencyName || "Department";
+    } else {
+      return conv.candidateName || "Candidate";
+    }
+  };
+
+  // When selecting an existing conversation, also grab its name
+  const handleSelectConversation = (conv: any) => {
+    setSelectedConversationId(conv.id);
+    setSelectedConversationName(getConversationName(conv));
   };
 
   if (!isOpen) {
@@ -178,7 +186,7 @@ export function ChatWidget() {
                     variant="ghost" 
                     size="icon" 
                     className="h-9 w-9 rounded-full hover:bg-white/5 text-white/70"
-                    onClick={() => setSelectedConversationId(null)}
+                    onClick={() => { setSelectedConversationId(null); setSelectedConversationName(""); }}
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
@@ -188,7 +196,7 @@ export function ChatWidget() {
                     </div>
                     <div>
                       <p className="font-bold text-sm text-white leading-none">
-                        {currentUser.type === "candidate" ? "Department Admin" : "Candidate Chat"}
+                        {selectedConversationName || (currentUser.type === "candidate" ? "Department" : "Candidate")}
                       </p>
                       <p className="text-[10px] text-green-500 font-bold uppercase mt-1 tracking-wider">Active Now</p>
                     </div>
@@ -197,7 +205,7 @@ export function ChatWidget() {
                 <div className="flex-1 min-h-0">
                   <MessagingPanel 
                     conversationId={selectedConversationId} 
-                    otherUserName={currentUser.type === "candidate" ? "Department" : "Candidate"}
+                    otherUserName={selectedConversationName || (currentUser.type === "candidate" ? "Department" : "Candidate")}
                   />
                 </div>
               </div>
@@ -265,10 +273,10 @@ export function ChatWidget() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {conversations.map((conv) => (
+                      {conversations.map((conv: any) => (
                         <button
                           key={conv.id}
-                          onClick={() => setSelectedConversationId(conv.id)}
+                          onClick={() => handleSelectConversation(conv)}
                           className="w-full text-left p-5 rounded-[1.5rem] bg-[#1e293b]/40 border border-white/5 hover:border-primary/40 hover:bg-[#1e293b]/60 transition-all group relative overflow-hidden"
                         >
                           <div className="flex items-center gap-4">
@@ -278,7 +286,7 @@ export function ChatWidget() {
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-start mb-1.5">
                                 <span className="font-bold text-sm text-white group-hover:text-primary transition-colors truncate">
-                                  {currentUser.type === "candidate" ? "Department Admin" : "Candidate Chat"}
+                                  {getConversationName(conv)}
                                 </span>
                                 <span className="text-[10px] font-bold text-white/20 uppercase tracking-tighter">
                                   {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })}
