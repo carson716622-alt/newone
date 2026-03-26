@@ -17,7 +17,6 @@ export function ChatWidget() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const [isStartingNew, setIsStartingNew] = useState(false);
-  const [newChatAgency, setNewChatAgency] = useState<{ id: number; name: string } | null>(null);
 
   // 1. Unread count query
   const unreadQuery = trpc.messaging.getUnreadCount.useQuery(
@@ -54,7 +53,6 @@ export function ChatWidget() {
     onSuccess: (data) => {
       setSelectedConversationId(data.conversationId);
       setIsStartingNew(false);
-      setNewChatAgency(null);
       if (currentUser?.type === "candidate") candidateQuery.refetch();
       else agencyQuery.refetch();
     }
@@ -76,10 +74,9 @@ export function ChatWidget() {
     setIsOpen(prev => !prev);
     setIsMinimized(false);
     setIsStartingNew(false);
-    setNewChatAgency(null);
   };
 
-  const handleStartNew = async (agencyId: number, agencyName: string) => {
+  const handleStartNew = async (agencyId: number) => {
     try {
       await startConversationMutation.mutateAsync({ agencyId });
     } catch (error) {
@@ -93,11 +90,11 @@ export function ChatWidget() {
         <Button
           onClick={toggleChat}
           size="icon"
-          className="h-16 w-16 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.2)] bg-primary hover:bg-primary/90 transition-all hover:scale-110 active:scale-95 border-2 border-white/20"
+          className="h-16 w-16 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.5)] bg-primary hover:bg-primary/90 transition-all hover:scale-110 active:scale-95 border border-white/10"
         >
           <MessageCircle className="h-8 w-8 text-primary-foreground" />
           {unreadQuery.data?.unreadCount ? (
-            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[11px] font-bold h-6 w-6 rounded-full flex items-center justify-center border-2 border-background animate-bounce shadow-lg">
+            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[11px] font-bold h-6 w-6 rounded-full flex items-center justify-center border-2 border-[#0f172a] animate-bounce shadow-lg">
               {unreadQuery.data.unreadCount > 9 ? '9+' : unreadQuery.data.unreadCount}
             </span>
           ) : null}
@@ -109,26 +106,29 @@ export function ChatWidget() {
   return (
     <div 
       className={`fixed bottom-6 right-6 z-[9999] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-        isMinimized ? 'h-14 w-72' : 'h-[600px] w-[420px]'
+        isMinimized ? 'h-14 w-72' : 'h-[700px] w-[480px]'
       }`}
     >
-      <Card className="h-full flex flex-col shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border-white/10 overflow-hidden bg-background/95 backdrop-blur-sm">
-        {/* Modern Header */}
-        <div className="p-4 bg-primary text-primary-foreground flex items-center justify-between shrink-0 border-b border-white/10">
+      <Card className="h-full flex flex-col shadow-[0_30px_90px_-20px_rgba(0,0,0,0.8)] border-white/5 overflow-hidden bg-[#0f172a]/95 backdrop-blur-xl">
+        {/* Dark Header */}
+        <div className="p-5 bg-[#1e293b] text-white flex items-center justify-between shrink-0 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center">
-              <MessageCircle className="h-5 w-5" />
+            <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/20">
+              <MessageCircle className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <span className="font-bold text-sm tracking-tight block leading-none">ApplytoBlue Messenger</span>
-              <span className="text-[10px] text-white/70 font-medium uppercase tracking-widest mt-1 block">Live Support</span>
+              <span className="font-bold text-base tracking-tight block leading-none">ApplytoBlue Messenger</span>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest leading-none">Live & Secure</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-primary-foreground hover:bg-white/10 rounded-full"
+              className="h-9 w-9 text-white/70 hover:bg-white/5 rounded-lg"
               onClick={() => setIsMinimized(prev => !prev)}
             >
               {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
@@ -136,7 +136,7 @@ export function ChatWidget() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-primary-foreground hover:bg-white/10 rounded-full"
+              className="h-9 w-9 text-white/70 hover:bg-white/5 rounded-lg"
               onClick={toggleChat}
             >
               <X className="h-4 w-4" />
@@ -145,32 +145,32 @@ export function ChatWidget() {
         </div>
 
         {!isMinimized && (
-          <div className="flex-1 flex flex-col min-h-0 bg-slate-50/30">
+          <div className="flex-1 flex flex-col min-h-0 bg-[#0f172a]">
             {selectedConversationId ? (
               /* Chat View */
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-3 border-b bg-background flex items-center gap-3">
+                <div className="p-3 border-b border-white/5 bg-[#1e293b]/50 flex items-center gap-3">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 rounded-full hover:bg-muted"
+                    className="h-9 w-9 rounded-full hover:bg-white/5 text-white/70"
                     onClick={() => setSelectedConversationId(null)}
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      {currentUser.type === "candidate" ? <Building2 className="h-4 w-4 text-primary" /> : <User2 className="h-4 w-4 text-primary" />}
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/10">
+                      {currentUser.type === "candidate" ? <Building2 className="h-5 w-5 text-primary" /> : <User2 className="h-5 w-5 text-primary" />}
                     </div>
                     <div>
-                      <p className="font-bold text-xs leading-none">
+                      <p className="font-bold text-sm text-white leading-none">
                         {currentUser.type === "candidate" ? "Department Admin" : "Candidate Chat"}
                       </p>
-                      <p className="text-[10px] text-green-500 font-bold uppercase mt-1">Online</p>
+                      <p className="text-[10px] text-green-500 font-bold uppercase mt-1 tracking-wider">Active Now</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex-1 min-h-0 bg-background">
+                <div className="flex-1 min-h-0">
                   <MessagingPanel 
                     conversationId={selectedConversationId} 
                     otherUserName={currentUser.type === "candidate" ? "Department" : "Candidate"}
@@ -180,16 +180,16 @@ export function ChatWidget() {
             ) : isStartingNew ? (
               /* New Conversation Selection */
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-3 border-b bg-background flex items-center gap-3">
+                <div className="p-4 border-b border-white/5 bg-[#1e293b]/50 flex items-center gap-3">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 rounded-full hover:bg-muted"
+                    className="h-9 w-9 rounded-full hover:bg-white/5 text-white/70"
                     onClick={() => setIsStartingNew(false)}
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
-                  <span className="font-bold text-xs uppercase tracking-wider">New Message</span>
+                  <span className="font-bold text-xs uppercase tracking-widest text-white/70">Start New Conversation</span>
                 </div>
                 <div className="flex-1 min-h-0">
                   <NewConversationDialog onSelect={handleStartNew} />
@@ -198,41 +198,41 @@ export function ChatWidget() {
             ) : (
               /* Conversation List View */
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-4 bg-white/50 border-b flex items-center justify-between">
-                  <h3 className="font-bold text-xs uppercase tracking-widest text-muted-foreground">Recent Chats</h3>
+                <div className="p-5 bg-[#1e293b]/30 border-b border-white/5 flex items-center justify-between">
+                  <h3 className="font-bold text-[11px] uppercase tracking-[0.2em] text-white/40">Recent Conversations</h3>
                   {currentUser.type === "candidate" && (
                     <Button 
                       size="sm" 
-                      className="h-8 gap-2 rounded-full px-4 text-[11px] font-bold"
+                      className="h-9 gap-2 rounded-xl px-5 text-xs font-bold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
                       onClick={() => setIsStartingNew(true)}
                     >
-                      <MessageSquarePlus className="h-3.5 w-3.5" />
-                      ASK A QUESTION
+                      <MessageSquarePlus className="h-4 w-4" />
+                      NEW MESSAGE
                     </Button>
                   )}
                 </div>
                 
-                <ScrollArea className="flex-1 p-3">
+                <ScrollArea className="flex-1 p-4">
                   {isLoading ? (
-                    <div className="flex flex-col justify-center items-center py-20 gap-3">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary/30" />
-                      <p className="text-xs text-muted-foreground font-medium">Updating Inbox...</p>
+                    <div className="flex flex-col justify-center items-center py-24 gap-4">
+                      <Loader2 className="h-10 w-10 animate-spin text-primary/40" />
+                      <p className="text-xs text-white/30 font-bold uppercase tracking-widest">Updating Secure Inbox</p>
                     </div>
                   ) : conversations.length === 0 ? (
-                    <div className="text-center py-20 px-8">
-                      <div className="bg-white shadow-sm w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-3">
-                        <MessageCircle className="h-10 w-10 text-primary/20" />
+                    <div className="text-center py-24 px-10">
+                      <div className="bg-[#1e293b] shadow-inner w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-white/5 transform -rotate-3">
+                        <MessageCircle className="h-12 w-12 text-primary/30" />
                       </div>
-                      <h4 className="text-base font-bold text-foreground mb-2">No conversations yet</h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
+                      <h4 className="text-lg font-bold text-white mb-3 tracking-tight">Your Inbox is Empty</h4>
+                      <p className="text-sm text-white/40 leading-relaxed font-medium">
                         {currentUser.type === "candidate" 
-                          ? "Have a question for a department? Start a new chat to connect with hiring managers directly." 
-                          : "You'll see messages here once candidates reach out or apply to your jobs."}
+                          ? "Have questions for a specific department? Start a direct conversation with hiring managers below." 
+                          : "No candidate messages yet. New inquiries will appear here as candidates reach out."}
                       </p>
                       {currentUser.type === "candidate" && (
                         <Button 
                           variant="outline" 
-                          className="mt-6 border-primary/20 text-primary hover:bg-primary/5 rounded-full font-bold text-xs"
+                          className="mt-10 border-white/10 text-white/70 hover:bg-white/5 hover:text-white rounded-xl font-bold text-xs py-6 px-8 tracking-widest uppercase"
                           onClick={() => setIsStartingNew(true)}
                         >
                           Message a Department
@@ -245,27 +245,27 @@ export function ChatWidget() {
                         <button
                           key={conv.id}
                           onClick={() => setSelectedConversationId(conv.id)}
-                          className="w-full text-left p-4 rounded-2xl bg-white border border-border/40 hover:border-primary/40 hover:shadow-[0_8px_20px_rgba(0,0,0,0.05)] transition-all group relative overflow-hidden"
+                          className="w-full text-left p-5 rounded-[1.5rem] bg-[#1e293b]/40 border border-white/5 hover:border-primary/40 hover:bg-[#1e293b]/60 transition-all group relative overflow-hidden"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                              {currentUser.type === "candidate" ? <Building2 className="h-5 w-5 text-slate-400 group-hover:text-primary" /> : <User2 className="h-5 w-5 text-slate-400 group-hover:text-primary" />}
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-2xl bg-[#0f172a] flex items-center justify-center group-hover:bg-primary/20 transition-all border border-white/5">
+                              {currentUser.type === "candidate" ? <Building2 className="h-6 w-6 text-white/30 group-hover:text-primary" /> : <User2 className="h-6 w-6 text-white/30 group-hover:text-primary" />}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start mb-0.5">
-                                <span className="font-bold text-[13px] text-foreground group-hover:text-primary transition-colors truncate">
+                              <div className="flex justify-between items-start mb-1.5">
+                                <span className="font-bold text-sm text-white group-hover:text-primary transition-colors truncate">
                                   {currentUser.type === "candidate" ? "Department Admin" : "Candidate Chat"}
                                 </span>
-                                <span className="text-[10px] font-bold text-muted-foreground/60 uppercase">
+                                <span className="text-[10px] font-bold text-white/20 uppercase tracking-tighter">
                                   {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-muted-foreground truncate leading-none">
-                                View message history
+                              <p className="text-xs text-white/40 truncate font-medium group-hover:text-white/60 transition-colors">
+                                Open conversation history
                               </p>
                             </div>
                           </div>
-                          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-primary transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300" />
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary transform -translate-x-full group-hover:translate-x-0 transition-transform duration-300" />
                         </button>
                       ))}
                     </div>
