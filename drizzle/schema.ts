@@ -328,3 +328,44 @@ export const applicationSubmissions = mysqlTable("applicationSubmissions", {
 
 export type ApplicationSubmission = typeof applicationSubmissions.$inferSelect;
 export type InsertApplicationSubmission = typeof applicationSubmissions.$inferInsert;
+
+
+// ========== CUSTOM DOCUMENT REQUIREMENTS ==========
+
+/**
+ * Job Document Requirements - custom upload titles defined by agencies per job posting
+ */
+export const jobDocumentRequirements = mysqlTable("jobDocumentRequirements", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("jobId").notNull().references(() => jobPostings.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 255 }).notNull(), // e.g., "Background Check Authorization", "Physical Fitness Test Results"
+  description: text("description"), // Optional description/instructions
+  isRequired: boolean("isRequired").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  jobIdIdx: index("jobDocReqs_jobId_idx").on(table.jobId),
+}));
+
+export type JobDocumentRequirement = typeof jobDocumentRequirements.$inferSelect;
+export type InsertJobDocumentRequirement = typeof jobDocumentRequirements.$inferInsert;
+
+/**
+ * Candidate Document Uploads - files uploaded by candidates for specific requirements
+ */
+export const candidateDocumentUploads = mysqlTable("candidateDocumentUploads", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("jobId").notNull().references(() => jobPostings.id, { onDelete: "cascade" }),
+  candidateId: int("candidateId").notNull().references(() => candidates.id, { onDelete: "cascade" }),
+  requirementId: int("requirementId").notNull().references(() => jobDocumentRequirements.id, { onDelete: "cascade" }),
+  fileUrl: text("fileUrl").notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
+}, (table) => ({
+  jobIdIdx: index("candidateDocUploads_jobId_idx").on(table.jobId),
+  candidateIdIdx: index("candidateDocUploads_candidateId_idx").on(table.candidateId),
+  requirementIdIdx: index("candidateDocUploads_requirementId_idx").on(table.requirementId),
+}));
+
+export type CandidateDocumentUpload = typeof candidateDocumentUploads.$inferSelect;
+export type InsertCandidateDocumentUpload = typeof candidateDocumentUploads.$inferInsert;

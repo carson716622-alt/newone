@@ -272,6 +272,33 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
   const fileRef = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  /* Custom document requirements */
+  const [docRequirements, setDocRequirements] = useState<{ title: string; description: string; isRequired: boolean }[]>([]);
+  const [newDocTitle, setNewDocTitle] = useState("");
+
+  const addDocRequirement = () => {
+    const title = newDocTitle.trim();
+    if (!title) return;
+    if (docRequirements.some(d => d.title.toLowerCase() === title.toLowerCase())) {
+      toast.error("This document title already exists.");
+      return;
+    }
+    setDocRequirements(prev => [...prev, { title, description: "", isRequired: true }]);
+    setNewDocTitle("");
+  };
+
+  const removeDocRequirement = (index: number) => {
+    setDocRequirements(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleDocRequired = (index: number) => {
+    setDocRequirements(prev => prev.map((d, i) => i === index ? { ...d, isRequired: !d.isRequired } : d));
+  };
+
+  const updateDocDescription = (index: number, desc: string) => {
+    setDocRequirements(prev => prev.map((d, i) => i === index ? { ...d, description: desc } : d));
+  };
+
   const updateField = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error when user types
@@ -332,6 +359,8 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
       deadline: "", salary: "", applyLink: "", website: "",
     });
     setPdfFile(null);
+    setDocRequirements([]);
+    setNewDocTitle("");
     setErrors({});
   };
 
@@ -379,7 +408,10 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
       salary: formData.salary || undefined,
       jobType: `${formData.employmentType} — ${formData.roleCategory}`,
       requirements: formData.requirements || undefined,
-      deadline,
+      deadline: deadline || null,
+      documentRequirements: docRequirements.length > 0
+        ? docRequirements.map((d, i) => ({ title: d.title, description: d.description || undefined, isRequired: d.isRequired, sortOrder: i }))
+        : undefined,
     });
   };
 
@@ -653,7 +685,104 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
 
             <Separator className="bg-white/5" />
 
-            {/* ─── SECTION 6: Application Form Upload ─── */}
+            {/* ─── SECTION 6: Required Documents ─── */}
+            <SectionHeader icon={ClipboardList} title="Required Documents for Candidates" subtitle="Define what documents candidates must upload when applying" />
+
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Add custom document titles that candidates will be asked to upload. For example: "Background Check Authorization", "Physical Fitness Test Results", "POST Certificate", etc.
+              </p>
+
+              {/* Existing requirements */}
+              {docRequirements.length > 0 && (
+                <div className="space-y-2">
+                  {docRequirements.map((doc, index) => (
+                    <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-primary shrink-0" />
+                          <span className="text-sm text-white font-medium">{doc.title}</span>
+                          <Badge variant="outline" className={doc.isRequired ? "border-red-500/30 text-red-400 text-[10px]" : "border-white/10 text-muted-foreground text-[10px]"}>
+                            {doc.isRequired ? "Required" : "Optional"}
+                          </Badge>
+                        </div>
+                        <Input
+                          value={doc.description}
+                          onChange={(e) => updateDocDescription(index, e.target.value)}
+                          placeholder="Instructions for this document (optional)"
+                          className="bg-background/50 border-white/10 text-xs h-8"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 pt-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleDocRequired(index)}
+                          className="text-xs text-muted-foreground hover:text-white h-7 px-2"
+                        >
+                          {doc.isRequired ? "Make Optional" : "Make Required"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeDocRequirement(index)}
+                          className="text-red-400 hover:text-red-300 h-7 px-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new requirement */}
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newDocTitle}
+                  onChange={(e) => setNewDocTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addDocRequirement(); } }}
+                  placeholder="Enter document title (e.g., Background Check Authorization)"
+                  className="bg-background/50 border-white/10 flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={addDocRequirement}
+                  disabled={!newDocTitle.trim()}
+                  className="border-white/10 hover:bg-white/5 shrink-0"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Add
+                </Button>
+              </div>
+
+              {/* Quick-add presets */}
+              {docRequirements.length === 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Quick add common documents:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {["Resume / CV", "Cover Letter", "POST Certificate", "Background Check Authorization", "Physical Fitness Test Results", "College Transcripts", "DD-214 (Military)", "Driver's License Copy"].map(preset => (
+                      <Button
+                        key={preset}
+                        variant="outline"
+                        size="sm"
+                        className="border-white/10 text-xs text-muted-foreground hover:text-white hover:bg-white/5 h-7"
+                        onClick={() => {
+                          if (!docRequirements.some(d => d.title === preset)) {
+                            setDocRequirements(prev => [...prev, { title: preset, description: "", isRequired: true }]);
+                          }
+                        }}
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> {preset}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Separator className="bg-white/5" />
+
+            {/* ─── SECTION 7: Application Form Upload ─── */}
             <SectionHeader icon={Upload} title="Application Form" subtitle="Upload your department's official application form" />
 
             <div className="space-y-2">

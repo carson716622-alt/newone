@@ -36,9 +36,13 @@ export default function ApplyJob() {
   const [resumeFile, setResumeFile] = useState<{ file: File; url?: string } | null>(null);
   const [supportingDocs, setSupportingDocs] = useState<{ file: File; url?: string }[]>([]);
 
+  // Required document uploads - keyed by requirement ID
+  const [requiredDocFiles, setRequiredDocFiles] = useState<Record<number, { file: File; url?: string }>>({});
+
   const applicationInputRef = useRef<HTMLInputElement>(null);
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const docsInputRef = useRef<HTMLInputElement>(null);
+  const requiredDocRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   // Fetch the job
   const { data: job, isLoading: jobLoading } = trpc.jobs.getById.useQuery(
@@ -48,6 +52,12 @@ export default function ApplyJob() {
 
   // Fetch the application form if it exists
   const { data: applicationForm } = trpc.applications.getForm.useQuery(
+    { jobId: jobId || 0 },
+    { enabled: !!jobId }
+  );
+
+  // Fetch document requirements for this job
+  const { data: docRequirements = [] } = trpc.applications.getDocumentRequirements.useQuery(
     { jobId: jobId || 0 },
     { enabled: !!jobId }
   );
@@ -69,6 +79,8 @@ export default function ApplyJob() {
       setIsSubmitting(false);
     },
   });
+
+  const uploadDocMutation = trpc.applications.uploadDocument.useMutation();
 
   // Upload a file to the server
   const uploadFile = async (file: File, category: string): Promise<string> => {
@@ -100,6 +112,20 @@ export default function ApplyJob() {
     }
   };
 
+  const handleRequiredDocSelect = (e: React.ChangeEvent<HTMLInputElement>, reqId: number) => {
+    const files = e.target.files;
+    if (!files || !files[0]) return;
+    setRequiredDocFiles(prev => ({ ...prev, [reqId]: { file: files[0] } }));
+  };
+
+  const removeRequiredDoc = (reqId: number) => {
+    setRequiredDocFiles(prev => {
+      const n = { ...prev };
+      delete n[reqId];
+      return n;
+    });
+  };
+
   const removeSupportingDoc = (index: number) => {
     setSupportingDocs((prev) => prev.filter((_, i) => i !== index));
   };
@@ -109,6 +135,14 @@ export default function ApplyJob() {
 
     if (!applicationFile && !resumeFile) {
       toast.error("Please upload your completed application form or resume.");
+      return;
+    }
+
+    // Check required documents
+    const requiredDocs = docRequirements.filter((d: any) => d.isRequired);
+    const missingDocs = requiredDocs.filter((d: any) => !requiredDocFiles[d.id]);
+    if (missingDocs.length > 0) {
+      toast.error(`Please upload all required documents: ${missingDocs.map((d: any) => d.title).join(", ")}`);
       return;
     }
 
@@ -129,6 +163,18 @@ export default function ApplyJob() {
       // Upload supporting docs
       for (const doc of supportingDocs) {
         await uploadFile(doc.file, "documents");
+      }
+
+      // Upload required documents and save references
+      for (const [reqIdStr, docFile] of Object.entries(requiredDocFiles)) {
+        const reqId = parseInt(reqIdStr);
+        const url = await uploadFile(docFile.file, "documents");
+        await uploadDocMutation.mutateAsync({
+          jobId,
+          requirementId: reqId,
+          fileUrl: url,
+          fileName: docFile.file.name,
+        });
       }
 
       submitMutation.mutate({
@@ -217,6 +263,7 @@ export default function ApplyJob() {
   }
 
   const hasApplicationForm = applicationForm && applicationForm.formUrl;
+  const hasDocRequirements = docRequirements.length > 0;
 
   return (
     <div className="container py-10 min-h-screen max-w-4xl mx-auto">
@@ -304,6 +351,39 @@ export default function ApplyJob() {
                   This department does not require a specific application form.
                   You can submit your resume and any supporting documents directly.
                 </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Show required documents info in review step */}
+          {hasDocRequirements && (
+            <Card className="bg-card border-white/5">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <File className="w-5 h-5 text-yellow-400" />
+                  Required Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-muted-foreground text-sm">
+                  This department requires the following documents to be uploaded with your application:
+                </p>
+                <div className="space-y-2">
+                  {docRequirements.map((req: any) => (
+                    <div key={req.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1">
+                        <span className="text-sm text-white font-medium">{req.title}</span>
+                        {req.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{req.description}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className={req.isRequired ? "border-red-500/30 text-red-400 text-[10px]" : "border-white/10 text-muted-foreground text-[10px]"}>
+                        {req.isRequired ? "Required" : "Optional"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -447,6 +527,71 @@ export default function ApplyJob() {
               )}
             </CardContent>
           </Card>
+
+          {/* Required Document Uploads */}
+          {hasDocRequirements && (
+            <Card className="bg-card border-white/5">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <File className="w-5 h-5 text-yellow-400" />
+                  Department Required Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Upload the following documents as requested by the department.
+                </p>
+                {docRequirements.map((req: any) => (
+                  <div key={req.id} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white font-medium">{req.title}</span>
+                      <Badge variant="outline" className={req.isRequired ? "border-red-500/30 text-red-400 text-[10px]" : "border-white/10 text-muted-foreground text-[10px]"}>
+                        {req.isRequired ? "Required" : "Optional"}
+                      </Badge>
+                    </div>
+                    {req.description && (
+                      <p className="text-xs text-muted-foreground">{req.description}</p>
+                    )}
+                    <input
+                      ref={(el) => { requiredDocRefs.current[req.id] = el; }}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => handleRequiredDocSelect(e, req.id)}
+                    />
+                    {requiredDocFiles[req.id] ? (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                        <File className="w-5 h-5 text-yellow-500" />
+                        <span className="text-yellow-400 flex-1 text-sm">{requiredDocFiles[req.id].file.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {(requiredDocFiles[req.id].file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeRequiredDoc(req.id)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="border-dashed border-white/20 hover:bg-white/5 w-full h-14"
+                        onClick={() => requiredDocRefs.current[req.id]?.click()}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Upload className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Upload {req.title}</span>
+                        </div>
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-card border-white/5">
             <CardHeader>

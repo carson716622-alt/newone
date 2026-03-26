@@ -22,7 +22,8 @@ import {
   getAllCandidateProfiles, getAllAgencies,
   getOrCreateConversation, getConversationById, getCandidateConversations, getAgencyConversations,
   getConversationMessages, sendMessage, markMessagesAsRead, getUnreadMessageCount, getTotalUnreadMessages,
-  uploadApplicationForm, getApplicationFormByJobId, submitApplication, getApplicationSubmissionsByJobId, getApplicationSubmissionsByCandidateId, getApplicationSubmission, updateApplicationStatus
+  uploadApplicationForm, getApplicationFormByJobId, submitApplication, getApplicationSubmissionsByJobId, getApplicationSubmissionsByCandidateId, getApplicationSubmission, updateApplicationStatus,
+  createDocumentRequirements, getDocumentRequirements, deleteDocumentRequirements, createCandidateDocUpload, getCandidateDocUploads
 } from "./db";
 
 // Hash password helper
@@ -372,12 +373,18 @@ export const appRouter = router({
       .input(z.object({
         agencyId: z.number(),
         title: z.string().min(5),
-        description: z.string().min(20),
+        description: z.string().min(10),
         location: z.string().min(3),
         salary: z.string().optional(),
         jobType: z.string().min(3),
         requirements: z.string().optional(),
-        deadline: z.date().optional()
+        deadline: z.date().optional().nullable(),
+        documentRequirements: z.array(z.object({
+          title: z.string().min(1),
+          description: z.string().optional(),
+          isRequired: z.boolean(),
+          sortOrder: z.number(),
+        })).optional(),
       }))
       .mutation(async ({ input }) => {
         try {
@@ -389,13 +396,20 @@ export const appRouter = router({
             salary: input.salary,
             jobType: input.jobType,
             requirements: input.requirements,
-            deadline: input.deadline,
+            deadline: input.deadline || undefined,
             status: "pending_approval"
           });
 
           const jobId = (result as any)[0]?.insertId || (result as any).insertId;
+
+          // Save document requirements if provided
+          if (input.documentRequirements && input.documentRequirements.length > 0 && jobId) {
+            await createDocumentRequirements(jobId, input.documentRequirements);
+          }
+
           return { success: true, jobId };
         } catch (error) {
+          console.error("Failed to create job:", error);
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create job" });
         }
       }),
@@ -765,6 +779,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         try {
+          // ctx.user.id is the candidateId for candidate users
           const convo = await getOrCreateConversation(ctx.user.id, input.agencyId, input.jobPostingId);
           return convo;
         } catch (error) {
@@ -784,7 +799,10 @@ export const appRouter = router({
     getAgencyConversations: protectedProcedure
       .query(async ({ ctx }) => {
         try {
-          return await getAgencyConversations(ctx.user.id);
+          // For agency users, ctx.user.id is the agencyAdmin id, but conversations
+          // are stored with the agencyId. Use ctx.user.agencyId instead.
+          const agencyId = ctx.user.agencyId || ctx.user.id;
+          return await getAgencyConversations(agencyId);
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch conversations" });
         }
@@ -794,7 +812,11 @@ export const appRouter = router({
       .input(z.object({ conversationId: z.number() }))
       .query(async ({ ctx, input }) => {
         try {
-          await markMessagesAsRead(input.conversationId, ctx.user.id);
+          // For marking messages as read, we need to use the correct ID
+          // For agency users, messages are sent by candidateId, so we mark
+          // messages not sent by the agency user as read
+          const userId = ctx.user.type === "agency" ? (ctx.user.agencyId || ctx.user.id) : ctx.user.id;
+          await markMessagesAsRead(input.conversationId, userId);
           return await getConversationMessages(input.conversationId);
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch messages" });
@@ -811,10 +833,14 @@ export const appRouter = router({
           const convo = await getConversationById(input.conversationId);
           if (!convo) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
           
-          const senderType = convo.candidateId === ctx.user.id ? "candidate" : "agency";
-          const message = await sendMessage(input.conversationId, ctx.user.id, senderType, input.content);
+          // Determine sender type based on user type from JWT, not by comparing IDs
+          const senderType = ctx.user.type === "candidate" ? "candidate" : "agency";
+          // Use the appropriate ID as senderId
+          const senderId = ctx.user.type === "agency" ? (ctx.user.agencyId || ctx.user.id) : ctx.user.id;
+          const message = await sendMessage(input.conversationId, senderId, senderType, input.content);
           return message;
         } catch (error) {
+          console.error("Failed to send message:", error);
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to send message" });
         }
       }),
@@ -822,7 +848,10 @@ export const appRouter = router({
     getUnreadCount: protectedProcedure
       .query(async ({ ctx }) => {
         try {
-          const totalUnread = await getTotalUnreadMessages(ctx.user.id, "candidate");
+          // Detect user type and use the correct ID
+          const userType = ctx.user.type === "candidate" ? "candidate" : "agency";
+          const userId = ctx.user.type === "agency" ? (ctx.user.agencyId || ctx.user.id) : ctx.user.id;
+          const totalUnread = await getTotalUnreadMessages(userId, userType as "candidate" | "agency");
           return { unreadCount: totalUnread };
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to get unread count" });
@@ -913,6 +942,51 @@ export const appRouter = router({
           return { success: true };
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update status" });
+        }
+      }),
+
+    // Document requirements per job
+    getDocumentRequirements: publicProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ input }) => {
+        try {
+          return await getDocumentRequirements(input.jobId);
+        } catch (error) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch document requirements" });
+        }
+      }),
+
+    // Upload a document for a specific requirement
+    uploadDocument: protectedProcedure
+      .input(z.object({
+        jobId: z.number(),
+        requirementId: z.number(),
+        fileUrl: z.string(),
+        fileName: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          await createCandidateDocUpload({
+            jobId: input.jobId,
+            candidateId: ctx.user.id,
+            requirementId: input.requirementId,
+            fileUrl: input.fileUrl,
+            fileName: input.fileName,
+          });
+          return { success: true };
+        } catch (error) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to upload document" });
+        }
+      }),
+
+    // Get candidate's uploaded documents for a job
+    getCandidateDocuments: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        try {
+          return await getCandidateDocUploads(input.jobId, ctx.user.id);
+        } catch (error) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch documents" });
         }
       }),
   }),

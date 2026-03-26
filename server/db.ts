@@ -17,7 +17,9 @@ import {
   InsertConversation, conversations,
   InsertMessage, messages,
   InsertApplicationForm, applicationForms,
-  InsertApplicationSubmission, applicationSubmissions
+  InsertApplicationSubmission, applicationSubmissions,
+  InsertJobDocumentRequirement, jobDocumentRequirements,
+  InsertCandidateDocumentUpload, candidateDocumentUploads
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -781,6 +783,70 @@ export async function getAllAgencies() {
     return await db.select().from(agencies);
   } catch (error) {
     console.error("Error fetching all agencies:", error);
+    return [];
+  }
+}
+
+
+// ========== DOCUMENT REQUIREMENTS ==========
+
+export async function createDocumentRequirements(jobId: number, requirements: { title: string; description?: string; isRequired: boolean; sortOrder: number }[]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  if (requirements.length === 0) return;
+  
+  const values = requirements.map(r => ({
+    jobId,
+    title: r.title,
+    description: r.description || null,
+    isRequired: r.isRequired,
+    sortOrder: r.sortOrder,
+  }));
+  
+  await db.insert(jobDocumentRequirements).values(values);
+}
+
+export async function getDocumentRequirements(jobId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  try {
+    return await db.select().from(jobDocumentRequirements)
+      .where(eq(jobDocumentRequirements.jobId, jobId))
+      .orderBy(jobDocumentRequirements.sortOrder);
+  } catch (error) {
+    console.error("Error fetching document requirements:", error);
+    return [];
+  }
+}
+
+export async function deleteDocumentRequirements(jobId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(jobDocumentRequirements).where(eq(jobDocumentRequirements.jobId, jobId));
+}
+
+export async function createCandidateDocUpload(upload: InsertCandidateDocumentUpload) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return await db.insert(candidateDocumentUploads).values(upload);
+}
+
+export async function getCandidateDocUploads(jobId: number, candidateId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  try {
+    return await db.select().from(candidateDocumentUploads)
+      .where(and(
+        eq(candidateDocumentUploads.jobId, jobId),
+        eq(candidateDocumentUploads.candidateId, candidateId)
+      ));
+  } catch (error) {
+    console.error("Error fetching candidate doc uploads:", error);
     return [];
   }
 }
