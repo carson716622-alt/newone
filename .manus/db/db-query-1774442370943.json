@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO jobPostings (agencyId, title, description, location, salary, jobType, requirements, status, deadline, createdAt, updatedAt) VALUES \n(1, 'Police Officer (Entry-Level)', 'Protect and serve the diverse communities of Chicago. Join one of the nation''s largest police departments with a rich history of public service and community engagement.', 'Chicago, IL 60653', '$72,000 - $98,000', 'Full-time', 'Must be 21 years of age or older. Valid driver''s license. Pass background check and medical examination.', 'approved', '2025-11-12', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3JyQwdKqpV6gBi7.d560b1752e5f --database DQCU3v7X4fheix7dHiRiz7 --execute INSERT INTO jobPostings (agencyId, title, description, location, salary, jobType, requirements, status, deadline, createdAt, updatedAt) VALUES \n(1, 'Police Officer (Entry-Level)', 'Protect and serve the diverse communities of Chicago. Join one of the nation''s largest police departments with a rich history of public service and community engagement.', 'Chicago, IL 60653', '$72,000 - $98,000', 'Full-time', 'Must be 21 years of age or older. Valid driver''s license. Pass background check and medical examination.', 'approved', '2025-11-12', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 384
+}

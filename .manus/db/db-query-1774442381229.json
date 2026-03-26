@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO jobPostings (agencyId, title, description, location, salary, jobType, requirements, status, deadline, createdAt, updatedAt) VALUES \n(1, 'Lateral Police Officer', 'Experienced officers needed to join our growing department. Bring your expertise and help us serve our community.', 'Chicago, IL 60653', '$85,000 - $105,000', 'Full-time', 'Current certification required. Minimum 2 years law enforcement experience.', 'approved', '2025-11-15', NOW(), NOW()),\n(1, 'Community Service Officer', 'Support role for the department. Help us engage with the community and provide excellent service.', 'Chicago, IL 60653', '$22.50/hr', 'Part-time', 'High school diploma or equivalent. Customer service experience preferred.', 'approved', '2025-10-01', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3JyQwdKqpV6gBi7.d560b1752e5f --database DQCU3v7X4fheix7dHiRiz7 --execute INSERT INTO jobPostings (agencyId, title, description, location, salary, jobType, requirements, status, deadline, createdAt, updatedAt) VALUES \n(1, 'Lateral Police Officer', 'Experienced officers needed to join our growing department. Bring your expertise and help us serve our community.', 'Chicago, IL 60653', '$85,000 - $105,000', 'Full-time', 'Current certification required. Minimum 2 years law enforcement experience.', 'approved', '2025-11-15', NOW(), NOW()),\n(1, 'Community Service Officer', 'Support role for the department. Help us engage with the community and provide excellent service.', 'Chicago, IL 60653', '$22.50/hr', 'Part-time', 'High school diploma or equivalent. Customer service experience preferred.', 'approved', '2025-10-01', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 367
+}

@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id, title, status FROM jobPostings ORDER BY id DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3JyQwdKqpV6gBi7.d560b1752e5f --database DQCU3v7X4fheix7dHiRiz7 --execute SELECT id, title, status FROM jobPostings ORDER BY id DESC;",
+  "rows": [
+    {
+      "id": "3",
+      "title": "Community Service Officer",
+      "status": "approved"
+    },
+    {
+      "id": "2",
+      "title": "Lateral Police Officer",
+      "status": "approved"
+    },
+    {
+      "id": "1",
+      "title": "Police Officer (Entry-Level)",
+      "status": "approved"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttitle\tstatus\n3\tCommunity Service Officer\tapproved\n2\tLateral Police Officer\tapproved\n1\tPolice Officer (Entry-Level)\tapproved\n",
+  "stderr": "",
+  "execution_time_ms": 353
+}
