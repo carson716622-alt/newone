@@ -83,9 +83,7 @@ export default function AgencyMessages() {
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">Candidate Name</p>
-                          <p className="text-xs opacity-75 truncate">
-                            {conv.messages?.[0]?.content || "No messages yet"}
-                          </p>
+                          <p className="text-xs opacity-75 truncate">Open conversation</p>
                         </div>
                         <span className="text-xs opacity-70 ml-2 whitespace-nowrap">
                           {formatDistanceToNow(new Date(conv.lastMessageAt), {

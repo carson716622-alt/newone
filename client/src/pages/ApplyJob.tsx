@@ -20,7 +20,7 @@ export default function ApplyJob() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const jobId = params.id ? parseInt(params.id) : null;
+  const jobId = params.id ?? null;
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);

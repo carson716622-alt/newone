@@ -7,11 +7,22 @@ export const getLoginUrl = () => {
   const redirectUri = `${window.location.origin}/api/oauth/callback`;
   const state = btoa(redirectUri);
 
-  const url = new URL(`${oauthPortalUrl}/app-auth`);
-  url.searchParams.set("appId", appId);
-  url.searchParams.set("redirectUri", redirectUri);
-  url.searchParams.set("state", state);
-  url.searchParams.set("type", "signIn");
+  if (!oauthPortalUrl) {
+    return "/candidate";
+  }
 
-  return url.toString();
+  try {
+    const url = new URL("/app-auth", oauthPortalUrl);
+    if (appId) {
+      url.searchParams.set("appId", appId);
+    }
+    url.searchParams.set("redirectUri", redirectUri);
+    url.searchParams.set("state", state);
+    url.searchParams.set("type", "signIn");
+
+    return url.toString();
+  } catch (error) {
+    console.error("Invalid OAuth portal URL configured", error);
+    return "/candidate";
+  }
 };
