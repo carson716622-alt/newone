@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,13 +48,16 @@ export function ChatWidget() {
     }
   );
 
-  // Start conversation mutation - FIXED: using correct procedure name
+  // Start conversation mutation
   const startConversationMutation = trpc.messaging.getOrCreateConversation.useMutation({
     onSuccess: (data) => {
-      setSelectedConversationId(data.id);
-      setIsStartingNew(false);
-      if (currentUser?.type === "candidate") candidateQuery.refetch();
-      else agencyQuery.refetch();
+      if (data && data.id) {
+        setSelectedConversationId(data.id);
+        setIsStartingNew(false);
+        // Force refetch to ensure the new conversation is in the list
+        if (currentUser?.type === "candidate") candidateQuery.refetch();
+        else agencyQuery.refetch();
+      }
     }
   });
 
@@ -66,6 +69,14 @@ export function ChatWidget() {
 
   const isLoading = currentUser?.type === "candidate" ? candidateQuery.isLoading : agencyQuery.isLoading;
 
+  // Reset states when closing the widget
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedConversationId(null);
+      setIsStartingNew(false);
+    }
+  }, [isOpen]);
+
   if (!currentUser || (currentUser.type !== "candidate" && currentUser.type !== "agency")) {
     return null;
   }
@@ -73,7 +84,6 @@ export function ChatWidget() {
   const toggleChat = () => {
     setIsOpen(prev => !prev);
     setIsMinimized(false);
-    setIsStartingNew(false);
   };
 
   const handleStartNew = async (agencyId: number) => {
