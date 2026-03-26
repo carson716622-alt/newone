@@ -20,34 +20,37 @@ export function ChatWidget() {
   }
 
   // Fetch conversations based on user type
-  const { data: candidateConvos = [], isLoading: candidateLoading } = trpc.messaging.getCandidateConversations.useQuery(
+  const candidateQuery = trpc.messaging.getCandidateConversations.useQuery(
     undefined,
     { 
-      enabled: user.type === "candidate" && isOpen,
-      refetchInterval: 10000 
+      enabled: user?.type === "candidate" && isOpen,
+      refetchInterval: 10000,
+      staleTime: 5000,
     }
   );
 
-  const { data: agencyConvos = [], isLoading: agencyLoading } = trpc.messaging.getAgencyConversations.useQuery(
+  const agencyQuery = trpc.messaging.getAgencyConversations.useQuery(
     undefined,
     { 
-      enabled: user.type === "agency" && isOpen,
-      refetchInterval: 10000 
+      enabled: user?.type === "agency" && isOpen,
+      refetchInterval: 10000,
+      staleTime: 5000,
     }
   );
 
-  const conversations = user.type === "candidate" ? candidateConvos : agencyConvos;
-  const isLoading = user.type === "candidate" ? candidateLoading : agencyLoading;
-  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+  const conversations = (user?.type === "candidate" ? candidateQuery.data : agencyQuery.data) ?? [];
+  const isLoading = user?.type === "candidate" ? candidateQuery.isLoading : agencyQuery.isLoading;
 
   // Get total unread count
-  const { data: unreadData } = trpc.messaging.getUnreadCount.useQuery(
+  const unreadQuery = trpc.messaging.getUnreadCount.useQuery(
     undefined,
     { 
       enabled: !!user,
-      refetchInterval: 30000 
+      refetchInterval: 30000,
+      staleTime: 10000,
     }
   );
+  const unreadData = unreadQuery.data;
 
   const toggleChat = () => {
     setIsOpen(!isOpen);
