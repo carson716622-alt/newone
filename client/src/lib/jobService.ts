@@ -20,6 +20,7 @@ export interface Job {
   views: number;
   clicks: number;
   rejectionReason?: string;
+  isFeatured?: boolean;
 }
 
 const STORAGE_KEY = 'applytoblue_jobs';
@@ -115,6 +116,7 @@ export const jobService = {
       ...jobData,
       id: nanoid(),
       status: 'pending',
+      isFeatured: false,
       views: 0,
       clicks: 0,
       postedDate: new Date().toISOString().split('T')[0]
@@ -153,5 +155,25 @@ export const jobService = {
       jobs[index].clicks += 1;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
     }
+  },
+
+  getJobById: (id: string): Job | undefined => {
+    const jobs = jobService.getAllJobs();
+    return jobs.find((job) => job.id === id);
+  },
+
+  updateJobFeatured: (id: string, isFeatured: boolean): void => {
+    const jobs = jobService.getAllJobs();
+    const index = jobs.findIndex((j) => j.id === id);
+    if (index !== -1) {
+      jobs[index].isFeatured = isFeatured;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
+    }
+  },
+
+  deleteJob: (id: string): void => {
+    const jobs = jobService.getAllJobs();
+    const updated = jobs.filter((job) => job.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   }
 };

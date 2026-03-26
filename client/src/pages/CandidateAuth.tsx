@@ -98,7 +98,7 @@ export default function CandidateAuth() {
   };
 
   if (showProfileSetup) {
-    return <ProfileSetupWizard onComplete={() => setLocation('/browse')} />;
+    return <ProfileSetupWizard isOpen={showProfileSetup} onComplete={() => setLocation('/browse')} />;
   }
 
   return (
