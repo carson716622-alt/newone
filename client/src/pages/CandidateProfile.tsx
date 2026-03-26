@@ -93,19 +93,21 @@ export default function CandidateProfile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // In production, upload to S3 first
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      setProfilePicture(dataUrl);
-      try {
-        await updatePictureMutation.mutateAsync({ pictureUrl: dataUrl });
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload/profile-pictures", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.success) {
+        setProfilePicture(data.url);
+        await updatePictureMutation.mutateAsync({ pictureUrl: data.url });
         toast.success("Profile picture updated!");
-      } catch (error) {
-        toast.error("Failed to update picture");
+      } else {
+        toast.error("Failed to upload picture");
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error("Failed to update picture");
+    }
   };
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,18 +115,20 @@ export default function CandidateProfile() {
     if (!file) return;
 
     setResumeFile(file);
-    // In production, upload to S3 first
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const dataUrl = event.target?.result as string;
-      try {
-        await updateResumeMutation.mutateAsync({ resumeUrl: dataUrl });
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload/resumes", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.success) {
+        await updateResumeMutation.mutateAsync({ resumeUrl: data.url });
         toast.success("Resume uploaded successfully!");
-      } catch (error) {
+      } else {
         toast.error("Failed to upload resume");
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error("Failed to upload resume");
+    }
   };
 
   const handleAddExperience = async () => {

@@ -70,22 +70,9 @@ export default function JobDetails() {
 
   const handleApply = () => {
     setIsApplying(true);
-
-    // Check if department has uploaded an application form
-    const hasApplicationForm = applicationForm && applicationForm.formUrl;
-
-    if (hasApplicationForm) {
-      // Open PDF viewer/download in-site
-      toast.success("Opening application form...");
-      setTimeout(() => {
-        setLocation(`/apply/${jobId}`);
-        setIsApplying(false);
-      }, 500);
-    } else {
-      // No application method available
-      toast.error("No application method available for this job");
-      setIsApplying(false);
-    }
+    // Always navigate to the apply page — candidates can upload resume/docs even without a PDF form
+    setLocation(`/apply/${jobId}`);
+    setIsApplying(false);
   };
 
   return (

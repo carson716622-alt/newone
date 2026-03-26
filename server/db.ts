@@ -699,7 +699,28 @@ export async function getApplicationSubmissionsByJobId(jobId: number) {
   if (!db) return [];
   
   try {
-    return await db.select().from(applicationSubmissions).where(eq(applicationSubmissions.jobId, jobId));
+    const rows = await db
+      .select({
+        id: applicationSubmissions.id,
+        jobId: applicationSubmissions.jobId,
+        candidateId: applicationSubmissions.candidateId,
+        submissionUrl: applicationSubmissions.submissionUrl,
+        submissionFileName: applicationSubmissions.submissionFileName,
+        status: applicationSubmissions.status,
+        notes: applicationSubmissions.notes,
+        submittedAt: applicationSubmissions.submittedAt,
+        updatedAt: applicationSubmissions.updatedAt,
+        candidateName: candidates.firstName,
+        candidateLastName: candidates.lastName,
+        candidateEmail: candidates.email,
+      })
+      .from(applicationSubmissions)
+      .leftJoin(candidates, eq(applicationSubmissions.candidateId, candidates.id))
+      .where(eq(applicationSubmissions.jobId, jobId));
+    return rows.map(r => ({
+      ...r,
+      candidateName: [r.candidateName, r.candidateLastName].filter(Boolean).join(" ") || `Candidate #${r.candidateId}`,
+    }));
   } catch (error) {
     console.error("Error fetching applications:", error);
     throw error;
