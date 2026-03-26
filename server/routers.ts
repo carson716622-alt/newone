@@ -221,7 +221,12 @@ export const appRouter = router({
             isVerified: false
           });
 
-          const agencyId = (agencyResult as any).insertId;
+          // In Drizzle with MySQL, the result is an array where the first element is the ResultSetHeader
+          const agencyId = (agencyResult as any)[0]?.insertId || (agencyResult as any).insertId;
+          
+          if (!agencyId) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to get agency ID after creation" });
+          }
 
           // Create agency admin
           const passwordHash = await hashPassword(input.password);
@@ -387,7 +392,8 @@ export const appRouter = router({
             status: "pending_approval"
           });
 
-          return { success: true, jobId: (result as any).insertId };
+          const jobId = (result as any)[0]?.insertId || (result as any).insertId;
+          return { success: true, jobId };
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create job" });
         }
