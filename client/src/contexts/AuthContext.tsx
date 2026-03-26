@@ -1,9 +1,17 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc';
 
+interface UserData {
+  id: number;
+  email: string;
+  name: string;
+  type: 'candidate' | 'admin' | 'agency';
+  agencyId?: number;
+}
+
 interface AuthContextType {
-  user: { id: number; email: string; name: string; type: 'candidate' | 'admin' | 'agency' } | null;
-  session: ({ id: number; email: string; name: string; type: 'candidate' | 'admin' | 'agency'; agencyId?: number } | null);
+  user: UserData | null;
+  session: UserData | null;
   userType: 'candidate' | 'admin' | 'agency' | null;
   isLoading: boolean;
   error: string | null;
@@ -16,17 +24,28 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthContextType['user']>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
-  // Check current user on mount
+  // Check current user on mount — auth.me returns the JWT payload which includes agencyId
   const { data: currentUser } = trpc.auth.me.useQuery();
 
   useEffect(() => {
     if (currentUser !== undefined) {
-      setUser(currentUser || null);
+      if (currentUser) {
+        // The JWT payload from auth.me already contains agencyId for agency users
+        setUser({
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name,
+          type: currentUser.type,
+          agencyId: (currentUser as any).agencyId,
+        });
+      } else {
+        setUser(null);
+      }
       setIsLoading(false);
     }
   }, [currentUser]);
@@ -46,13 +65,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (result?.success) {
-        // Set user from response
-        setUser({
-          id: result.candidate?.id || result.admin?.id || result.agencyAdmin?.id,
-          email: result.candidate?.email || result.admin?.email || result.agencyAdmin?.email,
-          name: result.candidate?.name || result.admin?.name || result.agencyAdmin?.name,
-          type: type
-        });
+        // Build user data from the login response
+        // Agency login returns { admin: { id, email, name, agencyId }, agency: { ... } }
+        // Candidate login returns { candidate: { id, email, name } }
+        // Admin login returns { admin: { id, email, name } }
+        const userData: UserData = {
+          id: result.candidate?.id || result.admin?.id,
+          email: result.candidate?.email || result.admin?.email,
+          name: result.candidate?.name || result.admin?.name,
+          type: type,
+        };
+
+        // For agency logins, the agencyId is in result.admin.agencyId
+        if (type === 'agency' && result.admin?.agencyId) {
+          userData.agencyId = result.admin.agencyId;
+        }
+
+        setUser(userData);
+
+        // Invalidate auth.me so it refetches with the new cookie
+        utils.auth.me.invalidate();
+
         return { success: true, message: 'Login successful' };
       } else {
         const message = result?.message || 'Login failed';
@@ -124,7 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        session: user ? { ...user } : null,
+        session: user,
         userType: user?.type ?? null,
         isLoading,
         error,
