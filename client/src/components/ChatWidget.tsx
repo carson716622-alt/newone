@@ -178,7 +178,7 @@ export function ChatWidget() {
                 </div>
               </div>
             ) : isStartingNew ? (
-              /* New Conversation Selection */
+              /* New Conversation Selection (Showing Full List) */
               <div className="flex-1 flex flex-col min-h-0">
                 <div className="p-4 border-b border-white/5 bg-[#1e293b]/50 flex items-center gap-3">
                   <Button 
@@ -189,17 +189,17 @@ export function ChatWidget() {
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
-                  <span className="font-bold text-xs uppercase tracking-widest text-white/70">Start New Conversation</span>
+                  <span className="font-bold text-xs uppercase tracking-widest text-white/70">Select a Department</span>
                 </div>
                 <div className="flex-1 min-h-0">
                   <NewConversationDialog onSelect={handleStartNew} />
                 </div>
               </div>
             ) : (
-              /* Conversation List View */
+              /* Main Menu (Showing Message History) */
               <div className="flex-1 flex flex-col min-h-0">
                 <div className="p-5 bg-[#1e293b]/30 border-b border-white/5 flex items-center justify-between">
-                  <h3 className="font-bold text-[11px] uppercase tracking-[0.2em] text-white/40">Recent Conversations</h3>
+                  <h3 className="font-bold text-[11px] uppercase tracking-[0.2em] text-white/40">Recent Messages</h3>
                   {currentUser.type === "candidate" && (
                     <Button 
                       size="sm" 
@@ -223,7 +223,7 @@ export function ChatWidget() {
                       <div className="bg-[#1e293b] shadow-inner w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 border border-white/5 transform -rotate-3">
                         <MessageCircle className="h-12 w-12 text-primary/30" />
                       </div>
-                      <h4 className="text-lg font-bold text-white mb-3 tracking-tight">Your Inbox is Empty</h4>
+                      <h4 className="text-lg font-bold text-white mb-3 tracking-tight">No messages yet</h4>
                       <p className="text-sm text-white/40 leading-relaxed font-medium">
                         {currentUser.type === "candidate" 
                           ? "Have questions for a specific department? Start a direct conversation with hiring managers below." 
@@ -261,7 +261,7 @@ export function ChatWidget() {
                                 </span>
                               </div>
                               <p className="text-xs text-white/40 truncate font-medium group-hover:text-white/60 transition-colors">
-                                Open conversation history
+                                View full conversation history
                               </p>
                             </div>
                           </div>
