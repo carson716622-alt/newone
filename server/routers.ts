@@ -32,7 +32,20 @@ async function hashPassword(password: string): Promise<string> {
 
 // Compare password helper
 async function comparePassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
+  if (!hash) return false;
+
+  // Backward compatibility for legacy records that may contain plaintext passwords.
+  // New records are always stored as bcrypt hashes.
+  const isBcryptHash = hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$");
+  if (!isBcryptHash) {
+    return password === hash;
+  }
+
+  try {
+    return await bcrypt.compare(password, hash);
+  } catch {
+    return false;
+  }
 }
 
 export const appRouter = router({
@@ -586,9 +599,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         try {
+          const { startDate, endDate, ...rest } = input;
           await addJobExperience({
             candidateId: ctx.user.id,
-            ...input
+            ...rest,
+            startDate: new Date(startDate),
+            endDate: endDate ? new Date(endDate) : undefined,
           });
           return { success: true };
         } catch (error) {
@@ -610,7 +626,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         try {
           const { experienceId, ...data } = input;
-          await updateJobExperience(experienceId, data);
+          await updateJobExperience(experienceId, {
+            ...data,
+            startDate: data.startDate ? new Date(data.startDate) : undefined,
+            endDate: data.endDate ? new Date(data.endDate) : undefined,
+          });
           return { success: true };
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update experience" });
@@ -648,9 +668,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         try {
+          const { issueDate, expirationDate, ...rest } = input;
           await addCertification({
             candidateId: ctx.user.id,
-            ...input
+            ...rest,
+            issueDate: new Date(issueDate),
+            expirationDate: expirationDate ? new Date(expirationDate) : undefined,
           });
           return { success: true };
         } catch (error) {
@@ -670,7 +693,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         try {
           const { certificationId, ...data } = input;
-          await updateCertification(certificationId, data);
+          await updateCertification(certificationId, {
+            ...data,
+            issueDate: data.issueDate ? new Date(data.issueDate) : undefined,
+            expirationDate: data.expirationDate ? new Date(data.expirationDate) : undefined,
+          });
           return { success: true };
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update certification" });

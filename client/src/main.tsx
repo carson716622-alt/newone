@@ -12,6 +12,28 @@ import "./index.css";
 // Initialize auth service with default admin accounts
 authService.initialize();
 
+const initAnalytics = () => {
+  if (typeof window === "undefined") return;
+
+  const endpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined;
+  const websiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined;
+
+  if (!endpoint || !websiteId) return;
+
+  try {
+    const analyticsUrl = new URL("/umami", endpoint);
+    const script = document.createElement("script");
+    script.defer = true;
+    script.src = analyticsUrl.toString();
+    script.dataset.websiteId = websiteId;
+    document.body.appendChild(script);
+  } catch (error) {
+    console.error("Invalid analytics URL configuration", error);
+  }
+};
+
+initAnalytics();
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
