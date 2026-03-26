@@ -4,6 +4,7 @@ import { Shield, Menu, LogOut, User } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { ChatWidget } from "./ChatWidget";
 
 function AuthNavButtons() {
   const { session, logout } = useAuth();
@@ -234,6 +235,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-grow pt-20">
         {children}
       </main>
+      <ChatWidget />
 
       <footer className="bg-card border-t border-white/5 pt-16 pb-8">
         <div className="container">
