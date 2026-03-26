@@ -151,13 +151,14 @@ export const appRouter = router({
             throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
           }
 
-          // Create and set JWT session cookie
-          const token = await createSessionToken({
-            id: admin.id,
-            type: "agency",
-            email: admin.email,
-            name: admin.name || ""
-          });
+	          // Create and set JWT session cookie
+	          const token = await createSessionToken({
+	            id: admin.id,
+	            type: "agency",
+	            email: admin.email,
+	            name: admin.name || "",
+	            agencyId: admin.agencyId
+	          });
           
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, token, cookieOptions);

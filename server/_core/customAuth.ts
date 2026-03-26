@@ -8,6 +8,7 @@ export type SessionPayload = {
   type: "candidate" | "admin" | "agency";
   email: string;
   name: string;
+  agencyId?: number;
   iat?: number;
   exp?: number;
 };
