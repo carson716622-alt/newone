@@ -61,7 +61,7 @@ export default function Dashboard() {
   useEffect(() => {
     // Load jobs from service for this agency
     if (session?.agencyId) {
-      const agencyProfile = authService.getAgencyProfile(session.agencyId);
+      const agencyProfile = authService.getAgencyProfile(String(session.agencyId));
       if (agencyProfile) {
         const allJobs = jobService.getAllJobs();
         const filtered = allJobs.filter(job => job.department === agencyProfile.departmentName);
@@ -70,7 +70,7 @@ export default function Dashboard() {
     }
   }, [session?.agencyId]);
 
-  const agencyProfile = session?.agencyId ? authService.getAgencyProfile(session.agencyId) : null;
+  const agencyProfile = session?.agencyId ? authService.getAgencyProfile(String(session.agencyId)) : null;
 
   // Check for duplicates whenever title or location changes
   const checkDuplicate = (title: string, city: string) => {
@@ -132,7 +132,8 @@ export default function Dashboard() {
         deadline: "",
         salary: "",
         applyLink: "",
-        website: ""
+        website: "",
+        applicationFormFile: null
       });
       setErrors({});
       setDuplicateWarning(null);

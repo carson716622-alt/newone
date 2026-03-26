@@ -3,6 +3,8 @@ import { trpc } from '@/lib/trpc';
 
 interface AuthContextType {
   user: { id: number; email: string; name: string; type: 'candidate' | 'admin' | 'agency' } | null;
+  session: ({ id: number; email: string; name: string; type: 'candidate' | 'admin' | 'agency'; agencyId?: number } | null);
+  userType: 'candidate' | 'admin' | 'agency' | null;
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string, type: 'candidate' | 'admin' | 'agency') => Promise<{ success: boolean; message: string }>;
@@ -17,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthContextType['user']>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const utils = trpc.useUtils();
 
   // Check current user on mount
   const { data: currentUser } = trpc.auth.me.useQuery();
@@ -35,11 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let result: any;
       
       if (type === 'candidate') {
-        result = await trpc.candidateAuth.login.mutate({ email, password });
+        result = await utils.client.candidateAuth.login.mutate({ email, password });
       } else if (type === 'admin') {
-        result = await trpc.adminAuth.login.mutate({ email, password });
+        result = await utils.client.adminAuth.login.mutate({ email, password });
       } else if (type === 'agency') {
-        result = await trpc.agencyAuth.login.mutate({ email, password });
+        result = await utils.client.agencyAuth.login.mutate({ email, password });
       }
 
       if (result?.success) {
@@ -72,11 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let result: any;
       
       if (type === 'candidate') {
-        result = await trpc.candidateAuth.register.mutate({ name, email, password });
+        result = await utils.client.candidateAuth.register.mutate({ name, email, password });
       } else if (type === 'admin') {
-        result = await trpc.adminAuth.register.mutate({ name, email, password });
+        result = await utils.client.adminAuth.register.mutate({ name, email, password });
       } else if (type === 'agency') {
-        result = await trpc.agencyAuth.register.mutate({
+        result = await utils.client.agencyAuth.register.mutate({
           departmentName: agencyData?.departmentName,
           address: agencyData?.address,
           phone: agencyData?.phone,
@@ -107,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     setIsLoading(true);
     try {
-      await trpc.auth.logout.mutate();
+      await utils.client.auth.logout.mutate();
       setUser(null);
       setError(null);
     } catch (err: any) {
@@ -121,6 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        session: user ? { ...user } : null,
+        userType: user?.type ?? null,
         isLoading,
         error,
         login,
