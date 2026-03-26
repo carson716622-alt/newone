@@ -77,6 +77,7 @@ export function ChatWidget() {
   };
 
   const handleStartNew = async (agencyId: number) => {
+    if (startConversationMutation.isPending) return;
     try {
       await startConversationMutation.mutateAsync({ agencyId });
     } catch (error) {

@@ -53,8 +53,13 @@ export function NewConversationDialog({ onSelect }: NewConversationDialogProps) 
             {filteredAgencies.map((agency) => (
               <button
                 key={agency.id}
-                onClick={() => onSelect(agency.id, agency.departmentName)}
-                className="w-full flex items-center gap-4 p-5 rounded-[1.5rem] bg-[#1e293b]/40 border border-white/5 hover:border-primary/40 hover:bg-[#1e293b]/60 transition-all text-left group relative overflow-hidden shadow-sm"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelect(agency.id, agency.departmentName);
+                }}
+                className="w-full flex items-center gap-4 p-5 rounded-[1.5rem] bg-[#1e293b]/40 border border-white/5 hover:border-primary/40 hover:bg-[#1e293b]/60 transition-all text-left group relative overflow-hidden shadow-sm cursor-pointer active:scale-[0.98]"
               >
                 <div className="h-12 w-12 rounded-2xl bg-[#0f172a] flex items-center justify-center border border-white/5 group-hover:bg-primary/20 transition-all">
                   <Building2 className="h-6 w-6 text-white/30 group-hover:text-primary" />
