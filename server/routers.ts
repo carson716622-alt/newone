@@ -19,7 +19,7 @@ import {
   getCandidateProfile, upsertCandidateProfile, updateCandidateProfilePicture, updateCandidateResume,
   getJobExperience, addJobExperience, updateJobExperience, deleteJobExperience,
   getCandidateCertifications, addCertification, updateCertification, deleteCertification,
-  getAllCandidateProfiles,
+  getAllCandidateProfiles, getAllAgencies,
   getOrCreateConversation, getConversationById, getCandidateConversations, getAgencyConversations,
   getConversationMessages, sendMessage, markMessagesAsRead, getUnreadMessageCount, getTotalUnreadMessages,
   uploadApplicationForm, getApplicationFormByJobId, submitApplication, getApplicationSubmissionsByJobId, getApplicationSubmissionsByCandidateId, getApplicationSubmission, updateApplicationStatus
@@ -449,6 +449,15 @@ export const appRouter = router({
           return { success: true };
         } catch (error) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete job posting" });
+        }
+      }),
+
+    getAgencies: publicProcedure
+      .query(async () => {
+        try {
+          return await getAllAgencies();
+        } catch (error) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch agencies" });
         }
       }),
   }),

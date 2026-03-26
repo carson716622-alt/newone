@@ -726,3 +726,15 @@ export async function updateApplicationStatus(submissionId: number, status: stri
     throw error;
   }
 }
+
+export async function getAllAgencies() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  try {
+    return await db.select().from(agencies);
+  } catch (error) {
+    console.error("Error fetching all agencies:", error);
+    return [];
+  }
+}
