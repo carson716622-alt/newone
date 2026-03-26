@@ -7,13 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
+import RichTextEditor from "@/components/RichTextEditor";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Briefcase, FileText, MapPin, Clock, CheckCircle2, AlertCircle, Plus,
   Eye, Search, Shield, Loader2, Users, Star, XCircle, ArrowLeft,
   ChevronRight, Upload, Trash2, Download, User, Calendar, DollarSign,
-  ExternalLink, Building2,
+  ExternalLink, Building2, Globe, Link2, GraduationCap, ClipboardList,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,6 +34,27 @@ const STATUS_CFG: Record<string, { label: string; cls: string; Icon: any }> = {
   accepted:    { label: "Accepted",    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
 };
 
+/* ── US States ─────────────────────────────────────────────── */
+const US_STATES = [
+  { value: "AL", label: "Alabama" }, { value: "AK", label: "Alaska" }, { value: "AZ", label: "Arizona" },
+  { value: "AR", label: "Arkansas" }, { value: "CA", label: "California" }, { value: "CO", label: "Colorado" },
+  { value: "CT", label: "Connecticut" }, { value: "DE", label: "Delaware" }, { value: "FL", label: "Florida" },
+  { value: "GA", label: "Georgia" }, { value: "HI", label: "Hawaii" }, { value: "ID", label: "Idaho" },
+  { value: "IL", label: "Illinois" }, { value: "IN", label: "Indiana" }, { value: "IA", label: "Iowa" },
+  { value: "KS", label: "Kansas" }, { value: "KY", label: "Kentucky" }, { value: "LA", label: "Louisiana" },
+  { value: "ME", label: "Maine" }, { value: "MD", label: "Maryland" }, { value: "MA", label: "Massachusetts" },
+  { value: "MI", label: "Michigan" }, { value: "MN", label: "Minnesota" }, { value: "MS", label: "Mississippi" },
+  { value: "MO", label: "Missouri" }, { value: "MT", label: "Montana" }, { value: "NE", label: "Nebraska" },
+  { value: "NV", label: "Nevada" }, { value: "NH", label: "New Hampshire" }, { value: "NJ", label: "New Jersey" },
+  { value: "NM", label: "New Mexico" }, { value: "NY", label: "New York" }, { value: "NC", label: "North Carolina" },
+  { value: "ND", label: "North Dakota" }, { value: "OH", label: "Ohio" }, { value: "OK", label: "Oklahoma" },
+  { value: "OR", label: "Oregon" }, { value: "PA", label: "Pennsylvania" }, { value: "RI", label: "Rhode Island" },
+  { value: "SC", label: "South Carolina" }, { value: "SD", label: "South Dakota" }, { value: "TN", label: "Tennessee" },
+  { value: "TX", label: "Texas" }, { value: "UT", label: "Utah" }, { value: "VT", label: "Vermont" },
+  { value: "VA", label: "Virginia" }, { value: "WA", label: "Washington" }, { value: "WV", label: "West Virginia" },
+  { value: "WI", label: "Wisconsin" }, { value: "WY", label: "Wyoming" },
+];
+
 type View = "overview" | "applications" | "candidate";
 
 export default function Dashboard() {
@@ -40,7 +66,7 @@ export default function Dashboard() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
 
-  /* post‑job dialog */
+  /* post-job dialog */
   const [isPostJobOpen, setIsPostJobOpen] = useState(false);
 
   /* data */
@@ -92,7 +118,7 @@ export default function Dashboard() {
 }
 
 /* ================================================================
-   OVERVIEW — stats + job list + post‑job dialog
+   OVERVIEW — stats + job list + post-job dialog
    ================================================================ */
 function OverviewSection({
   agencyId, jobs, jobsLoading, refetchJobs, isPostJobOpen, setIsPostJobOpen, onSelectJob,
@@ -108,7 +134,7 @@ function OverviewSection({
   );
 
   const approved = jobs.filter((j: any) => j.status === "approved").length;
-  const pending  = jobs.filter((j: any) => j.status === "pending").length;
+  const pending  = jobs.filter((j: any) => j.status === "pending_approval").length;
 
   return (
     <>
@@ -183,9 +209,9 @@ function OverviewSection({
                 <div className="flex items-center gap-3">
                   <Badge className={
                     job.status === "approved" ? "bg-green-500/10 text-green-400 border-green-500/20" :
-                    job.status === "pending"  ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" :
+                    job.status === "pending_approval"  ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" :
                     "bg-red-500/10 text-red-400 border-red-500/20"
-                  }>{job.status}</Badge>
+                  }>{job.status === "pending_approval" ? "Pending" : job.status}</Badge>
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </div>
               </CardContent>
@@ -215,31 +241,75 @@ function StatCard({ icon: Icon, iconCls, label, value }: { icon: any; iconCls: s
 }
 
 /* ================================================================
-   POST JOB DIALOG
+   POST JOB DIALOG — Full detailed form with all fields
    ================================================================ */
 function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
   agencyId: number; open: boolean; onOpenChange: (v: boolean) => void; onCreated: () => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [location, setLocation] = useState("");
-  const [salary, setSalary] = useState("");
-  const [jobType, setJobType] = useState("Full-time");
-  const [description, setDescription] = useState("");
-  const [requirements, setRequirements] = useState("");
+  const [formData, setFormData] = useState({
+    jobTitle: "",
+    city: "",
+    state: "",
+    zip: "",
+    employmentType: "Full-time",
+    roleCategory: "Police",
+    overview: "",
+    requirements: "",
+    preferredQualifications: "",
+    education: {
+      highSchool: false,
+      credits60: false,
+      associate: false,
+      bachelor: false,
+      powerCard: false,
+    },
+    deadline: "",
+    salary: "",
+    applyLink: "",
+    website: "",
+  });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const updateField = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user types
+    if (errors[field]) {
+      setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+    }
+  };
+
+  const toggleEducation = (key: keyof typeof formData.education) => {
+    setFormData(prev => ({
+      ...prev,
+      education: { ...prev.education, [key]: !prev.education[key] }
+    }));
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    if (!formData.jobTitle.trim()) newErrors.jobTitle = "Job title is required";
+    if (!formData.city.trim()) newErrors.city = "City is required";
+    if (!formData.state.trim()) newErrors.state = "State is required";
+    if (!formData.overview.trim() || formData.overview.replace(/<[^>]*>/g, '').trim().length < 20)
+      newErrors.overview = "Position overview is required (at least 20 characters)";
+    if (!formData.deadline.trim()) newErrors.deadline = "Application deadline is required";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const createMut = trpc.jobs.create.useMutation({
     onSuccess: async (data: any) => {
       /* upload application form PDF if provided */
-      if (pdfFile && data?.id) {
+      if (pdfFile && data?.jobId) {
         try {
           const fd = new FormData();
           fd.append("file", pdfFile);
           const res = await fetch("/api/upload/application-forms", { method: "POST", body: fd });
           if (res.ok) {
             const d = await res.json();
-            await uploadFormMut.mutateAsync({ jobId: data.id, formUrl: d.url, formFileName: d.fileName });
+            await uploadFormMut.mutateAsync({ jobId: data.jobId, formUrl: d.url, formFileName: d.fileName });
           }
         } catch { /* best effort */ }
       }
@@ -254,14 +324,77 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
   const uploadFormMut = trpc.applications.uploadForm.useMutation();
 
   const resetForm = () => {
-    setTitle(""); setLocation(""); setSalary(""); setJobType("Full-time");
-    setDescription(""); setRequirements(""); setPdfFile(null);
+    setFormData({
+      jobTitle: "", city: "", state: "", zip: "",
+      employmentType: "Full-time", roleCategory: "Police",
+      overview: "", requirements: "", preferredQualifications: "",
+      education: { highSchool: false, credits60: false, associate: false, bachelor: false, powerCard: false },
+      deadline: "", salary: "", applyLink: "", website: "",
+    });
+    setPdfFile(null);
+    setErrors({});
   };
 
   const handleSubmit = () => {
-    if (!title || !description || !location) { toast.error("Please fill in all required fields."); return; }
-    createMut.mutate({ agencyId, title, description, location, salary: salary || undefined, jobType: jobType || undefined, requirements: requirements || undefined });
+    if (!validateForm()) {
+      toast.error("Please fix the errors before submitting.");
+      return;
+    }
+
+    const location = `${formData.city}, ${formData.state}${formData.zip ? ` ${formData.zip}` : ''}`;
+    const deadline = formData.deadline ? new Date(formData.deadline) : undefined;
+
+    // Build a rich description that includes all the extra fields
+    let fullDescription = formData.overview;
+
+    // Append preferred qualifications into description if provided
+    if (formData.preferredQualifications.trim()) {
+      fullDescription += `\n\n<h3>Preferred Qualifications</h3>\n${formData.preferredQualifications}`;
+    }
+
+    // Append education requirements
+    const eduLabels: string[] = [];
+    if (formData.education.highSchool) eduLabels.push("High school diploma / GED");
+    if (formData.education.credits60) eduLabels.push("60+ credit hours");
+    if (formData.education.associate) eduLabels.push("Associate's degree");
+    if (formData.education.bachelor) eduLabels.push("Bachelor's degree");
+    if (formData.education.powerCard) eduLabels.push("Valid POWER card");
+    if (eduLabels.length > 0) {
+      fullDescription += `\n\n<h3>Minimum Education / Eligibility</h3>\n<ul>${eduLabels.map(e => `<li>${e}</li>`).join('')}</ul>`;
+    }
+
+    // Append links
+    if (formData.applyLink.trim()) {
+      fullDescription += `\n\n<h3>How to Apply</h3>\n<p>Apply online: <a href="${formData.applyLink}" target="_blank">${formData.applyLink}</a></p>`;
+    }
+    if (formData.website.trim()) {
+      fullDescription += `\n\n<p>Department website: <a href="${formData.website}" target="_blank">${formData.website}</a></p>`;
+    }
+
+    createMut.mutate({
+      agencyId,
+      title: formData.jobTitle,
+      description: fullDescription,
+      location,
+      salary: formData.salary || undefined,
+      jobType: `${formData.employmentType} — ${formData.roleCategory}`,
+      requirements: formData.requirements || undefined,
+      deadline,
+    });
   };
+
+  /* ── Section header helper ── */
+  const SectionHeader = ({ icon: SIcon, title, subtitle }: { icon: any; title: string; subtitle?: string }) => (
+    <div className="flex items-center gap-3 pt-2">
+      <div className="p-1.5 rounded-md bg-primary/10">
+        <SIcon className="w-4 h-4 text-primary" />
+      </div>
+      <div>
+        <h3 className="text-white font-semibold text-sm">{title}</h3>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -270,88 +403,304 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
           <Plus className="mr-2 h-4 w-4" /> Post New Opening
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl w-full max-h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10">
-        <DialogHeader className="p-6 border-b border-white/10">
-          <DialogTitle className="text-2xl text-white">Post a New Opening</DialogTitle>
-          <DialogDescription>Fill in the details below. The listing will be reviewed by an admin before going live.</DialogDescription>
+      <DialogContent className="max-w-[95vw] w-full lg:max-w-4xl h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10">
+        <DialogHeader className="p-6 pb-4 border-b border-white/10">
+          <DialogTitle className="text-2xl font-bold text-white">Post a New Opening</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Share a role for your agency. Fill in the details below — the listing will be reviewed by an admin before going live.
+          </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[calc(90vh-160px)]">
-          <div className="p-6 space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Job Title *" value={title} onChange={setTitle} placeholder="e.g. Police Officer" />
-              <Field label="Location *" value={location} onChange={setLocation} placeholder="e.g. Chicago, IL" />
-              <Field label="Salary Range" value={salary} onChange={setSalary} placeholder="e.g. $55,000 – $75,000" />
+
+        <ScrollArea className="h-full max-h-[calc(90vh-160px)]">
+          <div className="p-6 space-y-6">
+
+            {/* ─── SECTION 1: Basic Info ─── */}
+            <SectionHeader icon={Briefcase} title="Basic Information" subtitle="Job title, location, and type" />
+
+            <div className="space-y-2">
+              <Label htmlFor="jobTitle" className="text-white">Job Title <span className="text-red-400">*</span></Label>
+              <Input
+                id="jobTitle"
+                value={formData.jobTitle}
+                onChange={(e) => updateField("jobTitle", e.target.value)}
+                placeholder="e.g. Police Officer (Entry-Level)"
+                className={`bg-background/50 border-white/10 ${errors.jobTitle ? "border-red-500" : ""}`}
+              />
+              {errors.jobTitle && <p className="text-xs text-red-400">{errors.jobTitle}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label className="text-white">Job Type</Label>
-                <select value={jobType} onChange={(e) => setJobType(e.target.value)}
-                  className="w-full h-10 rounded-md border border-white/10 bg-background/50 px-3 text-sm text-white">
-                  <option value="Full-time">Full-time</option>
-                  <option value="Part-time">Part-time</option>
-                  <option value="Contract">Contract</option>
-                  <option value="Seasonal">Seasonal</option>
-                </select>
+                <Label htmlFor="city" className="text-white">City <span className="text-red-400">*</span></Label>
+                <LocationAutocomplete
+                  value={formData.city}
+                  onChange={(val) => updateField("city", val)}
+                  onSelect={(city, state, zip) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      city,
+                      state: state.toUpperCase(),
+                      zip: zip || prev.zip,
+                    }));
+                  }}
+                  className={`bg-background/50 border-white/10 ${errors.city ? "border-red-500" : ""}`}
+                  error={!!errors.city}
+                />
+                {errors.city && <p className="text-xs text-red-400">{errors.city}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state" className="text-white">State <span className="text-red-400">*</span></Label>
+                <Select
+                  value={formData.state}
+                  onValueChange={(val) => updateField("state", val)}
+                >
+                  <SelectTrigger className={`bg-background/50 border-white/10 ${errors.state ? "border-red-500" : ""}`}>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px]">
+                    {US_STATES.map(s => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.state && <p className="text-xs text-red-400">{errors.state}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="zip" className="text-white">ZIP Code</Label>
+                <Input
+                  id="zip"
+                  value={formData.zip}
+                  onChange={(e) => updateField("zip", e.target.value)}
+                  placeholder="ZIP code"
+                  className="bg-background/50 border-white/10"
+                />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-white">Job Description *</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the position, responsibilities, and what makes this opportunity great..."
-                className="bg-background/50 border-white/10 min-h-[120px]" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-white">Requirements</Label>
-              <Textarea value={requirements} onChange={(e) => setRequirements(e.target.value)}
-                placeholder="List qualifications, certifications, and experience required..."
-                className="bg-background/50 border-white/10 min-h-[80px]" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-white">Employment Type</Label>
+                <Select
+                  value={formData.employmentType}
+                  onValueChange={(val) => updateField("employmentType", val)}
+                >
+                  <SelectTrigger className="bg-background/50 border-white/10">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Full-time">Full-time</SelectItem>
+                    <SelectItem value="Part-time">Part-time</SelectItem>
+                    <SelectItem value="Reserve">Reserve</SelectItem>
+                    <SelectItem value="Contract">Contract</SelectItem>
+                    <SelectItem value="Seasonal">Seasonal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">Role Category</Label>
+                <Select
+                  value={formData.roleCategory}
+                  onValueChange={(val) => updateField("roleCategory", val)}
+                >
+                  <SelectTrigger className="bg-background/50 border-white/10">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Police">Police</SelectItem>
+                    <SelectItem value="Sheriff">Sheriff</SelectItem>
+                    <SelectItem value="Dispatch">Dispatch</SelectItem>
+                    <SelectItem value="Corrections">Corrections</SelectItem>
+                    <SelectItem value="Federal">Federal</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Separator className="bg-white/5" />
 
-            {/* PDF upload */}
+            {/* ─── SECTION 2: Description ─── */}
+            <SectionHeader icon={FileText} title="Position Details" subtitle="Describe the role and what makes your department unique" />
+
+            <div className="space-y-2">
+              <Label className="text-white">Position Overview / Description <span className="text-red-400">*</span></Label>
+              <RichTextEditor
+                value={formData.overview}
+                onChange={(val) => updateField("overview", val)}
+                placeholder="Summarize the role, schedule, and what makes this department unique."
+                minHeight="150px"
+              />
+              {errors.overview && <p className="text-xs text-red-400">{errors.overview}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-white">Requirements (experience, certifications, etc.)</Label>
+              <RichTextEditor
+                value={formData.requirements}
+                onChange={(val) => updateField("requirements", val)}
+                placeholder="Minimum age, education, POST certification, lateral criteria, etc."
+                minHeight="120px"
+              />
+            </div>
+
+            <Separator className="bg-white/5" />
+
+            {/* ─── SECTION 3: Education & Qualifications ─── */}
+            <SectionHeader icon={GraduationCap} title="Education & Qualifications" subtitle="Minimum education and preferred qualifications" />
+
+            <div className="space-y-3">
+              <Label className="text-white text-sm">Minimum Education / Eligibility</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { key: "highSchool" as const, label: "High school diploma / GED" },
+                  { key: "credits60" as const, label: "60+ credit hours" },
+                  { key: "associate" as const, label: "Associate's degree" },
+                  { key: "bachelor" as const, label: "Bachelor's degree" },
+                  { key: "powerCard" as const, label: "Valid POWER card" },
+                ].map(item => (
+                  <div key={item.key} className="flex items-center space-x-2 p-2.5 rounded-lg bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">
+                    <Checkbox
+                      id={item.key}
+                      checked={formData.education[item.key]}
+                      onCheckedChange={() => toggleEducation(item.key)}
+                      className="border-white/20"
+                    />
+                    <label htmlFor={item.key} className="text-sm text-muted-foreground cursor-pointer">{item.label}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-white">Preferred Qualifications (nice-to-haves)</Label>
+              <Textarea
+                value={formData.preferredQualifications}
+                onChange={(e) => updateField("preferredQualifications", e.target.value)}
+                placeholder="Language skills, specialty units, bachelor's degree preferred, etc."
+                className="bg-background/50 border-white/10 min-h-[80px]"
+              />
+            </div>
+
+            <Separator className="bg-white/5" />
+
+            {/* ─── SECTION 4: Compensation & Deadline ─── */}
+            <SectionHeader icon={DollarSign} title="Compensation & Timeline" subtitle="Salary details and application deadline" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="salary" className="text-white">Compensation</Label>
+                <Input
+                  id="salary"
+                  value={formData.salary}
+                  onChange={(e) => updateField("salary", e.target.value)}
+                  placeholder="$62,000 starting, lateral DOE"
+                  className="bg-background/50 border-white/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deadline" className="text-white">Applications Due By <span className="text-red-400">*</span></Label>
+                <Input
+                  id="deadline"
+                  type="date"
+                  value={formData.deadline}
+                  onChange={(e) => updateField("deadline", e.target.value)}
+                  className={`bg-background/50 border-white/10 ${errors.deadline ? "border-red-500" : ""}`}
+                />
+                {errors.deadline && <p className="text-xs text-red-400">{errors.deadline}</p>}
+              </div>
+            </div>
+
+            <Separator className="bg-white/5" />
+
+            {/* ─── SECTION 5: Links ─── */}
+            <SectionHeader icon={Link2} title="Links & Resources" subtitle="Application URL and department website" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="applyLink" className="text-white flex items-center gap-1.5">
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" /> Apply Link (URL)
+                </Label>
+                <Input
+                  id="applyLink"
+                  value={formData.applyLink}
+                  onChange={(e) => updateField("applyLink", e.target.value)}
+                  placeholder="https://your-agency.gov/jobs/apply"
+                  className="bg-background/50 border-white/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="website" className="text-white flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-muted-foreground" /> Department Website
+                </Label>
+                <Input
+                  id="website"
+                  value={formData.website}
+                  onChange={(e) => updateField("website", e.target.value)}
+                  placeholder="https://your-agency.gov"
+                  className="bg-background/50 border-white/10"
+                />
+              </div>
+            </div>
+
+            <Separator className="bg-white/5" />
+
+            {/* ─── SECTION 6: Application Form Upload ─── */}
+            <SectionHeader icon={Upload} title="Application Form" subtitle="Upload your department's official application form" />
+
             <div className="space-y-2">
               <Label className="text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" /> Application Form (PDF) — Optional
+                <FileText className="w-4 h-4 text-primary" /> Application Form (PDF/DOC)
               </Label>
-              <p className="text-xs text-muted-foreground">Upload your department's official application form. Candidates can download and fill it out on the site.</p>
-              <input ref={fileRef} type="file" accept=".pdf" className="hidden"
-                onChange={(e) => { if (e.target.files?.[0]) setPdfFile(e.target.files[0]); }} />
+              <p className="text-xs text-muted-foreground">Upload the application form candidates will download and submit. Accepted formats: PDF, DOC, DOCX.</p>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.doc,.docx"
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.[0]) setPdfFile(e.target.files[0]); }}
+              />
               {pdfFile ? (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
-                  <FileText className="w-5 h-5 text-primary" />
-                  <span className="text-primary flex-1 truncate">{pdfFile.name}</span>
-                  <span className="text-xs text-muted-foreground">{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                  <Button variant="ghost" size="sm" onClick={() => setPdfFile(null)} className="text-red-400 hover:text-red-300">
+                  <FileText className="w-5 h-5 text-primary shrink-0" />
+                  <span className="text-primary flex-1 truncate text-sm">{pdfFile.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{(pdfFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                  <Button variant="ghost" size="sm" onClick={() => setPdfFile(null)} className="text-red-400 hover:text-red-300 shrink-0">
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               ) : (
-                <Button variant="outline" className="border-dashed border-white/20 hover:bg-white/5 w-full h-14"
-                  onClick={() => fileRef.current?.click()}>
+                <Button
+                  variant="outline"
+                  className="border-dashed border-white/20 hover:bg-white/5 w-full h-16"
+                  onClick={() => fileRef.current?.click()}
+                >
                   <Upload className="w-5 h-5 mr-2 text-muted-foreground" />
-                  <span className="text-muted-foreground">Upload Application Form (PDF)</span>
+                  <span className="text-muted-foreground">Click to upload application form</span>
                 </Button>
               )}
             </div>
+
           </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t border-white/10">
-          <Button variant="outline" className="border-white/10" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isLoading} className="bg-primary hover:bg-primary/90 text-white">
-            {createMut.isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : "Post Job"}
+
+        <DialogFooter className="p-5 border-t border-white/10 bg-[#0f172a]">
+          <Button variant="ghost" className="text-muted-foreground hover:text-white" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={createMut.isLoading}
+            className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+          >
+            {createMut.isLoading ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</>
+            ) : (
+              <><Plus className="w-4 h-4 mr-2" />Post Job</>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder: string }) {
-  return (
-    <div className="space-y-2">
-      <Label className="text-white">{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="bg-background/50 border-white/10" />
-    </div>
   );
 }
 
@@ -496,7 +845,7 @@ function CandidateSection({ candidateId, onBack }: { candidateId: number; onBack
   );
 
   if (isLoading) return (
-    <div className="text-center py-20"><Loader2 className="w-8 h-8 mx-auto mb-4 text-primary animate-spin" /><p className="text-muted-foreground">Loading profile…</p></div>
+    <div className="text-center py-20"><Loader2 className="w-8 h-8 mx-auto mb-4 text-primary animate-spin" /><p className="text-muted-foreground">Loading profile...</p></div>
   );
 
   if (!profile) return (
