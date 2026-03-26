@@ -21,14 +21,16 @@ const initAnalytics = () => {
   if (!endpoint || !websiteId) return;
 
   try {
-    const analyticsUrl = new URL("/umami", endpoint);
+    // Ensure endpoint is a valid absolute URL by adding protocol if missing
+    const baseUrl = endpoint.startsWith('http') ? endpoint : `https://${endpoint}`;
+    const analyticsUrl = new URL("/umami", baseUrl);
     const script = document.createElement("script");
     script.defer = true;
     script.src = analyticsUrl.toString();
     script.dataset.websiteId = websiteId;
     document.body.appendChild(script);
   } catch (error) {
-    console.error("Invalid analytics URL configuration", error);
+    console.error("Invalid analytics URL configuration:", error, "Endpoint:", endpoint);
   }
 };
 
