@@ -22,6 +22,7 @@ import AgencyMessages from "./pages/AgencyMessages";
 import CandidateProfilePage from "./pages/CandidateProfilePage";
 import JobDetails from "./pages/JobDetails";
 import ApplyJob from "./pages/ApplyJob";
+import AboutUs from "./pages/AboutUs";
 import Layout from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -36,6 +37,7 @@ function Router() {
         <Route path={"/admin-login"} component={AdminLogin} />
         <Route path={"/candidate"} component={CandidateAuth} />
         <Route path={"/browse"} component={BrowseJobs} />
+        <Route path={"/about"} component={AboutUs} />
         <Route path={"/dashboard"}>
           {() => (
             <ProtectedRoute requiredType="agency">
