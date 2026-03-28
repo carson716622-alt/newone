@@ -989,6 +989,17 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch documents" });
         }
       }),
+
+    // Agency: view candidate's uploaded documents for a job
+    getApplicantDocuments: publicProcedure
+      .input(z.object({ jobId: z.number(), candidateId: z.number() }))
+      .query(async ({ input }) => {
+        try {
+          return await getCandidateDocUploads(input.jobId, input.candidateId);
+        } catch (error) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch applicant documents" });
+        }
+      }),
   }),
 });
 

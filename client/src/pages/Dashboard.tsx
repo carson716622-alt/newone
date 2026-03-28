@@ -854,15 +854,18 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
 }
 
 /* ================================================================
-   APPLICATIONS — view all applications for a job
+   APPLICATIONS — view all applications for a job (enhanced)
    ================================================================ */
 function ApplicationsSection({ jobId, onBack, onViewCandidate }: {
   jobId: number; onBack: () => void; onViewCandidate: (id: number) => void;
 }) {
   const [filter, setFilter] = useState("all");
+  const [expandedApp, setExpandedApp] = useState<number | null>(null);
+  const [pdfViewApp, setPdfViewApp] = useState<number | null>(null);
   const { data: job } = trpc.jobs.getById.useQuery({ id: jobId });
   const { data: apps, isLoading, refetch } = trpc.applications.getByJob.useQuery({ jobId }, { staleTime: 5000 });
   const { data: form } = trpc.applications.getForm.useQuery({ jobId });
+  const { data: docReqs } = trpc.applications.getDocumentRequirements.useQuery({ jobId });
 
   const updateMut = trpc.applications.updateStatus.useMutation({
     onSuccess: () => { refetch(); toast.success("Status updated."); },
@@ -879,19 +882,53 @@ function ApplicationsSection({ jobId, onBack, onViewCandidate }: {
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
       </Button>
 
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">{job?.title || "Job Applications"}</h1>
-          <p className="text-muted-foreground mt-1 flex items-center gap-2">
-            <MapPin className="w-4 h-4" /> {job?.location}
-          </p>
-        </div>
-        {form?.formUrl && (
-          <Button variant="outline" className="border-white/10" onClick={() => window.open(form.formUrl, "_blank")}>
-            <Download className="w-4 h-4 mr-2" /> View Application Form
-          </Button>
-        )}
-      </div>
+      {/* Job header card */}
+      <Card className="bg-card/50 border-white/5">
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Briefcase className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">{job?.title || "Job Applications"}</h1>
+                <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job?.location}</span>
+                  {job?.salary && <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> {job.salary}</span>}
+                  {job?.jobType && <span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" /> {job.jobType}</span>}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {form?.formUrl && (
+                <Button variant="outline" className="border-white/10" onClick={() => window.open(form.formUrl, "_blank")}>
+                  <FileText className="w-4 h-4 mr-2" /> View Blank Form
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5 pt-5 border-t border-white/5">
+            <div className="text-center p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+              <p className="text-2xl font-bold text-blue-400">{(apps || []).length}</p>
+              <p className="text-xs text-muted-foreground">Total Applicants</p>
+            </div>
+            <div className="text-center p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
+              <p className="text-2xl font-bold text-yellow-400">{counts.reviewing || 0}</p>
+              <p className="text-xs text-muted-foreground">Under Review</p>
+            </div>
+            <div className="text-center p-3 rounded-lg bg-green-500/5 border border-green-500/10">
+              <p className="text-2xl font-bold text-green-400">{counts.shortlisted || 0}</p>
+              <p className="text-xs text-muted-foreground">Shortlisted</p>
+            </div>
+            <div className="text-center p-3 rounded-lg bg-purple-500/5 border border-purple-500/10">
+              <p className="text-2xl font-bold text-purple-400">{(counts.offered || 0) + (counts.accepted || 0)}</p>
+              <p className="text-xs text-muted-foreground">Offered / Accepted</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Pipeline filter */}
       <div className="flex gap-2 flex-wrap">
@@ -901,7 +938,7 @@ function ApplicationsSection({ jobId, onBack, onViewCandidate }: {
         ))}
       </div>
 
-      {/* List */}
+      {/* Application list */}
       {isLoading ? (
         <div className="text-center py-16"><Loader2 className="w-8 h-8 mx-auto text-primary animate-spin" /></div>
       ) : list.length === 0 ? (
@@ -914,65 +951,176 @@ function ApplicationsSection({ jobId, onBack, onViewCandidate }: {
         </Card>
       ) : (
         <div className="space-y-3">
-          {list.map((app: any) => {
-            const s = STATUS_CFG[app.status] || STATUS_CFG.applied;
-            return (
-              <Card key={app.id} className="bg-card/50 border-white/5">
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-white font-semibold">
-                          {app.candidateName || `Candidate #${app.candidateId}`}
-                        </h3>
-                        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            Applied {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : "Recently"}
-                          </span>
-                          {app.submissionFileName && (
-                            <span className="flex items-center gap-1">
-                              <FileText className="w-3 h-3" /> {app.submissionFileName}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className={s.cls}><s.Icon className="w-3 h-3 mr-1" />{s.label}</Badge>
-                      {app.submissionUrl && (
-                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white"
-                          onClick={() => window.open(app.submissionUrl, "_blank")} title="Download Application">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary"
-                        onClick={() => onViewCandidate(app.candidateId)} title="View Profile">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Status actions */}
-                  <div className="pt-3 border-t border-white/5 flex gap-2 flex-wrap items-center">
-                    <span className="text-xs text-muted-foreground mr-1">Move to:</span>
-                    {Object.entries(STATUS_CFG).filter(([k]) => k !== app.status).map(([k, c]) => (
-                      <Button key={k} variant="outline" size="sm" className="border-white/10 text-xs h-7"
-                        onClick={() => updateMut.mutate({ submissionId: app.id, status: k as any })}>
-                        {c.label}
-                      </Button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {list.map((app: any) => (
+            <ApplicationCard
+              key={app.id}
+              app={app}
+              jobId={jobId}
+              isExpanded={expandedApp === app.id}
+              isPdfOpen={pdfViewApp === app.id}
+              onToggleExpand={() => setExpandedApp(expandedApp === app.id ? null : app.id)}
+              onTogglePdf={() => setPdfViewApp(pdfViewApp === app.id ? null : app.id)}
+              onViewCandidate={onViewCandidate}
+              onUpdateStatus={(status) => updateMut.mutate({ submissionId: app.id, status })}
+              isUpdating={updateMut.isLoading}
+            />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+/* ── Single Application Card (expandable) ─────────────────────── */
+function ApplicationCard({ app, jobId, isExpanded, isPdfOpen, onToggleExpand, onTogglePdf, onViewCandidate, onUpdateStatus, isUpdating }: {
+  app: any; jobId: number; isExpanded: boolean; isPdfOpen: boolean;
+  onToggleExpand: () => void; onTogglePdf: () => void;
+  onViewCandidate: (id: number) => void;
+  onUpdateStatus: (status: string) => void; isUpdating: boolean;
+}) {
+  const s = STATUS_CFG[app.status] || STATUS_CFG.applied;
+  const { data: docs } = trpc.applications.getApplicantDocuments.useQuery(
+    { jobId, candidateId: app.candidateId },
+    { enabled: isExpanded }
+  );
+  const fullName = [app.candidateName, app.candidateLastName].filter(Boolean).join(" ") || `Candidate #${app.candidateId}`;
+
+  return (
+    <Card className={`bg-card/50 border-white/5 transition-all ${
+      isExpanded ? "border-primary/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]" : "hover:border-white/10"
+    }`}>
+      <CardContent className="p-0">
+        {/* Main row — always visible */}
+        <div
+          className="p-5 flex items-center justify-between cursor-pointer"
+          onClick={onToggleExpand}
+        >
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <User className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="text-white font-semibold truncate">{fullName}</h3>
+                <Badge className={`${s.cls} shrink-0`}><s.Icon className="w-3 h-3 mr-1" />{s.label}</Badge>
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                {app.candidateEmail && (
+                  <span className="flex items-center gap-1 truncate">
+                    <ExternalLink className="w-3 h-3 shrink-0" /> {app.candidateEmail}
+                  </span>
+                )}
+                <span className="flex items-center gap-1 shrink-0">
+                  <Calendar className="w-3 h-3" />
+                  {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : "Recently"}
+                </span>
+                {app.submissionFileName && (
+                  <span className="flex items-center gap-1 shrink-0">
+                    <FileText className="w-3 h-3" /> Form attached
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-3">
+            <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+          </div>
+        </div>
+
+        {/* Expanded detail panel */}
+        {isExpanded && (
+          <div className="border-t border-white/5">
+            {/* Action bar */}
+            <div className="px-5 py-3 bg-white/[0.02] flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" className="border-white/10 text-xs h-8"
+                onClick={() => onViewCandidate(app.candidateId)}>
+                <User className="w-3.5 h-3.5 mr-1.5" /> View Full Profile
+              </Button>
+              {app.submissionUrl && (
+                <>
+                  <Button variant="outline" size="sm" className="border-white/10 text-xs h-8"
+                    onClick={() => window.open(app.submissionUrl, "_blank")}>
+                    <Download className="w-3.5 h-3.5 mr-1.5" /> Download Application
+                  </Button>
+                  <Button variant="outline" size="sm" className={`border-white/10 text-xs h-8 ${
+                    isPdfOpen ? "bg-primary/10 border-primary/30 text-primary" : ""
+                  }`} onClick={onTogglePdf}>
+                    <Eye className="w-3.5 h-3.5 mr-1.5" /> {isPdfOpen ? "Hide PDF" : "View PDF"}
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {/* Inline PDF viewer */}
+            {isPdfOpen && app.submissionUrl && (
+              <div className="px-5 pb-4">
+                <div className="rounded-lg overflow-hidden border border-white/10 bg-white">
+                  <iframe
+                    src={app.submissionUrl}
+                    className="w-full"
+                    style={{ height: "600px" }}
+                    title={`Application from ${fullName}`}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Uploaded documents */}
+            {docs && docs.length > 0 && (
+              <div className="px-5 pb-4">
+                <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-primary" /> Uploaded Documents ({docs.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {docs.map((doc: any) => (
+                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{doc.title || doc.fileName}</p>
+                        <p className="text-xs text-muted-foreground">{doc.fileName}</p>
+                      </div>
+                      {doc.fileUrl && (
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white shrink-0 h-7 w-7 p-0"
+                          onClick={() => window.open(doc.fileUrl, "_blank")}>
+                          <Download className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {app.notes && (
+              <div className="px-5 pb-4">
+                <h4 className="text-sm font-semibold text-white mb-2">Candidate Notes</h4>
+                <p className="text-sm text-muted-foreground bg-white/[0.03] border border-white/5 rounded-lg p-3">{app.notes}</p>
+              </div>
+            )}
+
+            {/* Status pipeline */}
+            <div className="px-5 py-4 border-t border-white/5 bg-white/[0.02]">
+              <p className="text-xs text-muted-foreground mb-2 font-medium">Move to pipeline stage:</p>
+              <div className="flex gap-2 flex-wrap">
+                {Object.entries(STATUS_CFG).map(([k, c]) => (
+                  <Button key={k} variant="outline" size="sm"
+                    disabled={k === app.status || isUpdating}
+                    className={`border-white/10 text-xs h-8 ${
+                      k === app.status ? "bg-white/5 opacity-50 cursor-not-allowed" : "hover:border-white/20"
+                    }`}
+                    onClick={() => onUpdateStatus(k)}>
+                    <c.Icon className="w-3 h-3 mr-1.5" />
+                    {c.label}
+                    {k === app.status && " (current)"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -986,7 +1134,7 @@ function PillBtn({ active, onClick, children }: { active: boolean; onClick: () =
 }
 
 /* ================================================================
-   CANDIDATE PROFILE — view a candidate's full profile
+   CANDIDATE PROFILE — view a candidate's full profile (enhanced)
    ================================================================ */
 function CandidateSection({ candidateId, onBack }: { candidateId: number; onBack: () => void }) {
   const { data: profile, isLoading } = trpc.profiles.getCandidateProfileById.useQuery(
@@ -1014,33 +1162,39 @@ function CandidateSection({ candidateId, onBack }: { candidateId: number; onBack
 
       {/* Header */}
       <Card className="bg-card/50 border-white/5">
-        <CardContent className="p-6 flex items-center gap-6 flex-wrap">
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
-            {profile.profilePicture
-              ? <img src={profile.profilePicture} alt="" className="w-full h-full object-cover" />
-              : <User className="w-10 h-10 text-primary" />}
+        <CardContent className="p-6">
+          <div className="flex items-center gap-6 flex-wrap">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
+              {profile.profilePicture
+                ? <img src={profile.profilePicture} alt="" className="w-full h-full object-cover" />
+                : <User className="w-10 h-10 text-primary" />}
+            </div>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-white">{profile.firstName} {profile.lastName}</h1>
+              <p className="text-muted-foreground flex items-center gap-1.5 mt-1">
+                <ExternalLink className="w-3.5 h-3.5" /> {profile.email}
+              </p>
+              {profile.bio && <p className="text-sm text-muted-foreground mt-3 max-w-lg leading-relaxed">{profile.bio}</p>}
+            </div>
+            <div className="flex flex-col gap-2 shrink-0">
+              {profile.resumeUrl && (
+                <Button variant="outline" className="border-white/10" onClick={() => window.open(profile.resumeUrl, "_blank")}>
+                  <Download className="w-4 h-4 mr-2" /> Resume
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-white">{profile.firstName} {profile.lastName}</h1>
-            <p className="text-muted-foreground">{profile.email}</p>
-            {profile.bio && <p className="text-sm text-muted-foreground mt-2 max-w-lg">{profile.bio}</p>}
-          </div>
-          {profile.resumeUrl && (
-            <Button variant="outline" className="border-white/10" onClick={() => window.open(profile.resumeUrl, "_blank")}>
-              <Download className="w-4 h-4 mr-2" /> Resume
-            </Button>
-          )}
         </CardContent>
       </Card>
 
       {/* Skills */}
       {profile.skills && (
         <Card className="bg-card/50 border-white/5">
-          <CardHeader><CardTitle className="text-white">Skills</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-white text-lg">Skills & Competencies</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {profile.skills.split(",").map((s: string, i: number) => (
-                <Badge key={i} className="bg-primary/10 text-primary border-primary/20">{s.trim()}</Badge>
+                <Badge key={i} className="bg-primary/10 text-primary border-primary/20 px-3 py-1">{s.trim()}</Badge>
               ))}
             </div>
           </CardContent>
@@ -1050,17 +1204,20 @@ function CandidateSection({ candidateId, onBack }: { candidateId: number; onBack
       {/* Experience */}
       {profile.experience?.length > 0 && (
         <Card className="bg-card/50 border-white/5">
-          <CardHeader><CardTitle className="text-white">Work Experience</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-white text-lg">Work Experience</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {profile.experience.map((e: any, i: number) => (
-              <div key={i} className="border-l-2 border-primary/30 pl-4">
+              <div key={i} className="border-l-2 border-primary/30 pl-4 py-1">
                 <h3 className="text-white font-semibold">{e.jobTitle}</h3>
-                <p className="text-muted-foreground text-sm">{e.department}</p>
-                {e.location && <p className="text-muted-foreground text-xs">{e.location}</p>}
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-muted-foreground text-sm flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" /> {e.department}
+                </p>
+                {e.location && <p className="text-muted-foreground text-xs flex items-center gap-1.5 mt-0.5"><MapPin className="w-3 h-3" /> {e.location}</p>}
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                  <Calendar className="w-3 h-3" />
                   {e.startDate ? new Date(e.startDate).toLocaleDateString() : ""} — {e.isCurrentPosition ? "Present" : e.endDate ? new Date(e.endDate).toLocaleDateString() : ""}
                 </p>
-                {e.description && <p className="text-sm text-muted-foreground mt-2">{e.description}</p>}
+                {e.description && <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{e.description}</p>}
               </div>
             ))}
           </CardContent>
@@ -1070,17 +1227,17 @@ function CandidateSection({ candidateId, onBack }: { candidateId: number; onBack
       {/* Certifications */}
       {profile.certifications?.length > 0 && (
         <Card className="bg-card/50 border-white/5">
-          <CardHeader><CardTitle className="text-white">Certifications</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-white text-lg">Certifications & Licenses</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {profile.certifications.map((c: any, i: number) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-white/5">
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
                 <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
                 <div className="flex-1">
                   <h4 className="text-white font-medium">{c.certificationName}</h4>
                   <p className="text-xs text-muted-foreground">{c.issuingOrganization}</p>
                 </div>
                 {c.certificateUrl && (
-                  <Button variant="ghost" size="sm" onClick={() => window.open(c.certificateUrl, "_blank")}>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white" onClick={() => window.open(c.certificateUrl, "_blank")}>
                     <ExternalLink className="w-4 h-4" />
                   </Button>
                 )}
