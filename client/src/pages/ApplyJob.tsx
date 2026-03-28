@@ -21,6 +21,7 @@ import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import PdfEditor from "@/components/PdfEditor";
 
 export default function ApplyJob() {
   const params = useParams();
@@ -41,6 +42,7 @@ export default function ApplyJob() {
   const [requiredDocFiles, setRequiredDocFiles] = useState<Record<number, { file: File }>>({});
 
   const completedFormRef = useRef<HTMLInputElement>(null);
+  const [editorExportedBlob, setEditorExportedBlob] = useState<Blob | null>(null);
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const docsInputRef = useRef<HTMLInputElement>(null);
   const requiredDocRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -118,9 +120,9 @@ export default function ApplyJob() {
   const handleSubmitApplication = async () => {
     if (!jobId || !session) return;
 
-    // If there's an application form, the completed form is required
-    if (hasApplicationForm && !completedFormFile) {
-      toast.error("Please upload your completed application form.");
+    // If there's an application form, the completed form or editor export is required
+    if (hasApplicationForm && !completedFormFile && !editorExportedBlob) {
+      toast.error("Please fill out and save the application form, or upload a completed version.");
       return;
     }
 
@@ -144,8 +146,12 @@ export default function ApplyJob() {
       let submissionUrl = "";
       let submissionFileName = "";
 
-      // Upload the completed application form
-      if (completedFormFile) {
+      // Upload the completed application form (from editor or manual upload)
+      if (editorExportedBlob) {
+        const editorFile = new window.File([editorExportedBlob], "filled_application.pdf", { type: "application/pdf" });
+        submissionUrl = await uploadFile(editorFile, "application-submissions");
+        submissionFileName = "filled_application.pdf";
+      } else if (completedFormFile) {
         submissionUrl = await uploadFile(completedFormFile.file, "application-submissions");
         submissionFileName = completedFormFile.file.name;
       }
@@ -305,105 +311,89 @@ export default function ApplyJob() {
         <div className="space-y-6">
           {hasApplicationForm ? (
             <>
-              {/* Embedded PDF Application Form */}
+              {/* PDF Editor */}
               <Card className="bg-card border-white/5">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-white flex items-center gap-2">
                       <Pen className="w-5 h-5 text-primary" />
-                      Department Application Form
+                      Fill Out Application Form
                     </CardTitle>
                     <Badge variant="outline" className="border-primary/30 text-primary text-xs">
                       Required
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <Eye className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-blue-300 text-sm font-medium mb-1">How to complete this form:</p>
-                        <ol className="text-blue-300/80 text-sm space-y-1 list-decimal list-inside">
-                          <li>View the PDF form below — you can scroll through all pages</li>
-                          <li>Click <strong>"Download Form"</strong> to save it to your computer</li>
-                          <li>Open the downloaded PDF in Adobe Acrobat or your PDF reader and fill in all fields</li>
-                          <li>Save the completed PDF, then upload it using the <strong>"Upload Completed Form"</strong> button below</li>
-                        </ol>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Embedded PDF Viewer */}
-                  <div className="border border-white/10 rounded-lg overflow-hidden bg-black/30">
-                    <iframe
-                      src={`${applicationForm.formUrl}#toolbar=1&navpanes=0`}
-                      className="w-full"
-                      style={{ height: "700px" }}
-                      title="Application Form"
-                    />
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Button
-                      variant="outline"
-                      className="border-primary/30 text-primary hover:bg-primary/10 flex-1"
-                      onClick={() => {
-                        const link = document.createElement("a");
-                        link.href = applicationForm.formUrl;
-                        link.download = applicationForm.formFileName || "application-form.pdf";
-                        link.click();
-                      }}
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download Form ({applicationForm.formFileName})
-                    </Button>
-                  </div>
-
-                  {/* Upload completed form */}
-                  <div className="border-t border-white/10 pt-4">
-                    <p className="text-sm text-white font-medium mb-3 flex items-center gap-2">
-                      <Upload className="w-4 h-4 text-primary" />
-                      Upload Your Completed Application Form
-                    </p>
-                    <input
-                      ref={completedFormRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) setCompletedFormFile({ file: e.target.files[0] });
-                      }}
-                    />
-                    {completedFormFile ? (
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                        <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
-                        <span className="text-green-400 flex-1 text-sm">{completedFormFile.file.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {(completedFormFile.file.size / 1024 / 1024).toFixed(2)} MB
-                        </span>
+                <CardContent className="space-y-4 p-0 sm:p-6 sm:pt-0">
+                  {editorExportedBlob ? (
+                    <div className="p-4 sm:p-0">
+                      <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <CheckCircle2 className="w-6 h-6 text-green-500 shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-green-400 font-medium">Application form completed!</p>
+                          <p className="text-xs text-green-400/70 mt-0.5">Your filled form is ready to submit. You can edit it again or continue to the next step.</p>
+                        </div>
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          onClick={() => setCompletedFormFile(null)}
-                          className="text-red-400 hover:text-red-300"
+                          onClick={() => setEditorExportedBlob(null)}
+                          className="border-green-500/30 text-green-400 hover:bg-green-500/10 text-xs"
                         >
-                          <X className="w-4 h-4" />
+                          Edit Again
                         </Button>
                       </div>
-                    ) : (
+                    </div>
+                  ) : (
+                    <PdfEditor
+                      pdfUrl={applicationForm.formUrl}
+                      onExport={(blob) => {
+                        setEditorExportedBlob(blob);
+                        toast.success("Application form saved! Continue to the next step.");
+                      }}
+                    />
+                  )}
+
+                  {/* Fallback: manual upload option */}
+                  <div className="border-t border-white/10 pt-4 px-4 sm:px-0 pb-4 sm:pb-0">
+                    <p className="text-xs text-muted-foreground mb-2">Prefer to fill it out offline? Download the blank form, complete it, and upload below:</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <Button
                         variant="outline"
-                        className="border-dashed border-white/20 hover:bg-white/5 w-full h-16"
+                        size="sm"
+                        className="border-white/10 text-muted-foreground hover:text-white text-xs"
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = applicationForm.formUrl;
+                          link.download = applicationForm.formFileName || "application-form.pdf";
+                          link.click();
+                        }}
+                      >
+                        <Download className="w-3.5 h-3.5 mr-1.5" />
+                        Download Blank Form
+                      </Button>
+                      <input
+                        ref={completedFormRef}
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            setCompletedFormFile({ file: e.target.files[0] });
+                            setEditorExportedBlob(null);
+                            toast.success("Uploaded form received!");
+                          }
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-white/10 text-muted-foreground hover:text-white text-xs"
                         onClick={() => completedFormRef.current?.click()}
                       >
-                        <div className="flex flex-col items-center gap-1">
-                          <Upload className="w-5 h-5 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Click to upload your completed application form</span>
-                        </div>
+                        <Upload className="w-3.5 h-3.5 mr-1.5" />
+                        {completedFormFile ? completedFormFile.file.name : "Upload Completed Form"}
                       </Button>
-                    )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -490,10 +480,10 @@ export default function ApplyJob() {
             <Button
               className="bg-primary hover:bg-primary/90 text-white px-8"
               onClick={() => setStep("documents")}
-              disabled={hasApplicationForm && !completedFormFile}
+              disabled={hasApplicationForm && !completedFormFile && !editorExportedBlob}
             >
-              {hasApplicationForm && !completedFormFile ? (
-                "Upload completed form to continue"
+              {hasApplicationForm && !completedFormFile && !editorExportedBlob ? (
+                "Complete the application form to continue"
               ) : (
                 <>
                   Continue to Documents
