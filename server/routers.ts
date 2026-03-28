@@ -893,8 +893,8 @@ export const appRouter = router({
     submit: protectedProcedure
       .input(z.object({
         jobId: z.number(),
-        submissionUrl: z.string().url(),
-        submissionFileName: z.string(),
+        submissionUrl: z.string().optional().default(""),
+        submissionFileName: z.string().optional().default(""),
       }))
       .mutation(async ({ ctx, input }) => {
         try {
