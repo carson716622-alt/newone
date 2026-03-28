@@ -336,16 +336,27 @@ function PostJobDialog({ agencyId, open, onOpenChange, onCreated }: {
           const res = await fetch("/api/upload/application-forms", { method: "POST", body: fd });
           if (res.ok) {
             const d = await res.json();
+            console.log("[PDF Upload] File uploaded:", d);
             await uploadFormMut.mutateAsync({ jobId: data.jobId, formUrl: d.url, formFileName: d.fileName });
+            console.log("[PDF Upload] Form record saved for jobId:", data.jobId);
+          } else {
+            console.error("[PDF Upload] Upload failed:", res.status, await res.text());
+            toast.error("Application form upload failed, but job was created.");
           }
-        } catch { /* best effort */ }
+        } catch (err) {
+          console.error("[PDF Upload] Error:", err);
+          toast.error("Application form upload failed, but job was created.");
+        }
       }
       toast.success("Job posted successfully! Pending admin review.");
       resetForm();
       onOpenChange(false);
       onCreated();
     },
-    onError: () => toast.error("Failed to create job posting."),
+    onError: (err: any) => {
+      console.error("[Job Create] Error:", err);
+      toast.error("Failed to create job posting.");
+    },
   });
 
   const uploadFormMut = trpc.applications.uploadForm.useMutation();

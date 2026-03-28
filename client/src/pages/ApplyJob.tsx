@@ -2,7 +2,6 @@ import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
@@ -15,6 +14,8 @@ import {
   X,
   File,
   Send,
+  Eye,
+  Pen,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
@@ -27,19 +28,19 @@ export default function ApplyJob() {
   const { session } = useAuth();
   const jobId = params.id ? parseInt(params.id) : null;
 
-  const [step, setStep] = useState<"review" | "upload" | "submitted">("review");
+  const [step, setStep] = useState<"form" | "documents" | "submitted">("form");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
 
   // Uploaded files state
-  const [applicationFile, setApplicationFile] = useState<{ file: File; url?: string } | null>(null);
-  const [resumeFile, setResumeFile] = useState<{ file: File; url?: string } | null>(null);
-  const [supportingDocs, setSupportingDocs] = useState<{ file: File; url?: string }[]>([]);
+  const [completedFormFile, setCompletedFormFile] = useState<{ file: File } | null>(null);
+  const [resumeFile, setResumeFile] = useState<{ file: File } | null>(null);
+  const [supportingDocs, setSupportingDocs] = useState<{ file: File }[]>([]);
 
   // Required document uploads - keyed by requirement ID
-  const [requiredDocFiles, setRequiredDocFiles] = useState<Record<number, { file: File; url?: string }>>({});
+  const [requiredDocFiles, setRequiredDocFiles] = useState<Record<number, { file: File }>>({});
 
-  const applicationInputRef = useRef<HTMLInputElement>(null);
+  const completedFormRef = useRef<HTMLInputElement>(null);
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const docsInputRef = useRef<HTMLInputElement>(null);
   const requiredDocRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -74,7 +75,8 @@ export default function ApplyJob() {
       setStep("submitted");
       toast.success("Application submitted successfully!");
     },
-    onError: () => {
+    onError: (err) => {
+      console.error("[Submit Error]", err);
       toast.error("Failed to submit application. Please try again.");
       setIsSubmitting(false);
     },
@@ -93,23 +95,6 @@ export default function ApplyJob() {
     if (!res.ok) throw new Error("Upload failed");
     const data = await res.json();
     return data.url;
-  };
-
-  const handleFileSelect = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    type: "application" | "resume" | "docs"
-  ) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    if (type === "application") {
-      setApplicationFile({ file: files[0] });
-    } else if (type === "resume") {
-      setResumeFile({ file: files[0] });
-    } else {
-      const newDocs = Array.from(files).map((f) => ({ file: f }));
-      setSupportingDocs((prev) => [...prev, ...newDocs]);
-    }
   };
 
   const handleRequiredDocSelect = (e: React.ChangeEvent<HTMLInputElement>, reqId: number) => {
@@ -133,8 +118,15 @@ export default function ApplyJob() {
   const handleSubmitApplication = async () => {
     if (!jobId || !session) return;
 
-    if (!applicationFile && !resumeFile) {
-      toast.error("Please upload your completed application form or resume.");
+    // If there's an application form, the completed form is required
+    if (hasApplicationForm && !completedFormFile) {
+      toast.error("Please upload your completed application form.");
+      return;
+    }
+
+    // If no application form, resume is required
+    if (!hasApplicationForm && !resumeFile) {
+      toast.error("Please upload your resume.");
       return;
     }
 
@@ -152,12 +144,19 @@ export default function ApplyJob() {
       let submissionUrl = "";
       let submissionFileName = "";
 
-      if (applicationFile) {
-        submissionUrl = await uploadFile(applicationFile.file, "application-submissions");
-        submissionFileName = applicationFile.file.name;
-      } else if (resumeFile) {
-        submissionUrl = await uploadFile(resumeFile.file, "resumes");
-        submissionFileName = resumeFile.file.name;
+      // Upload the completed application form
+      if (completedFormFile) {
+        submissionUrl = await uploadFile(completedFormFile.file, "application-submissions");
+        submissionFileName = completedFormFile.file.name;
+      }
+
+      // Upload resume
+      if (resumeFile) {
+        const resumeUrl = await uploadFile(resumeFile.file, "resumes");
+        if (!submissionUrl) {
+          submissionUrl = resumeUrl;
+          submissionFileName = resumeFile.file.name;
+        }
       }
 
       // Upload supporting docs
@@ -183,6 +182,7 @@ export default function ApplyJob() {
         submissionFileName,
       });
     } catch (error) {
+      console.error("[Upload Error]", error);
       toast.error("Failed to upload files. Please try again.");
       setIsSubmitting(false);
     }
@@ -266,7 +266,7 @@ export default function ApplyJob() {
   const hasDocRequirements = docRequirements.length > 0;
 
   return (
-    <div className="container py-10 min-h-screen max-w-4xl mx-auto">
+    <div className="container py-10 min-h-screen max-w-5xl mx-auto">
       {/* Back Button */}
       <Button
         variant="ghost"
@@ -285,60 +285,131 @@ export default function ApplyJob() {
 
       {/* Steps indicator */}
       <div className="flex items-center gap-4 mb-8">
-        <div className={`flex items-center gap-2 ${step === "review" ? "text-primary" : "text-muted-foreground"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === "review" ? "bg-primary text-white" : "bg-white/10 text-muted-foreground"}`}>
+        <div className={`flex items-center gap-2 ${step === "form" ? "text-primary" : "text-muted-foreground"}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === "form" ? "bg-primary text-white" : "bg-white/10 text-muted-foreground"}`}>
             1
           </div>
-          <span className="text-sm font-medium">Review & Download</span>
+          <span className="text-sm font-medium">{hasApplicationForm ? "Fill Application" : "Review & Upload"}</span>
         </div>
         <div className="flex-1 h-px bg-white/10" />
-        <div className={`flex items-center gap-2 ${step === "upload" ? "text-primary" : "text-muted-foreground"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === "upload" ? "bg-primary text-white" : "bg-white/10 text-muted-foreground"}`}>
+        <div className={`flex items-center gap-2 ${step === "documents" ? "text-primary" : "text-muted-foreground"}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === "documents" ? "bg-primary text-white" : "bg-white/10 text-muted-foreground"}`}>
             2
           </div>
-          <span className="text-sm font-medium">Upload & Submit</span>
+          <span className="text-sm font-medium">Documents & Submit</span>
         </div>
       </div>
 
-      {step === "review" && (
+      {/* ==================== STEP 1: FORM / REVIEW ==================== */}
+      {step === "form" && (
         <div className="space-y-6">
           {hasApplicationForm ? (
-            <Card className="bg-card border-white/5">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" />
-                  Department Application Form
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-muted-foreground">
-                  This department requires you to fill out their official application form.
-                  Download the PDF below, fill it out, and upload the completed version in the next step.
-                </p>
+            <>
+              {/* Embedded PDF Application Form */}
+              <Card className="bg-card border-white/5">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Pen className="w-5 h-5 text-primary" />
+                      Department Application Form
+                    </CardTitle>
+                    <Badge variant="outline" className="border-primary/30 text-primary text-xs">
+                      Required
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Eye className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-blue-300 text-sm font-medium mb-1">How to complete this form:</p>
+                        <ol className="text-blue-300/80 text-sm space-y-1 list-decimal list-inside">
+                          <li>View the PDF form below — you can scroll through all pages</li>
+                          <li>Click <strong>"Download Form"</strong> to save it to your computer</li>
+                          <li>Open the downloaded PDF in Adobe Acrobat or your PDF reader and fill in all fields</li>
+                          <li>Save the completed PDF, then upload it using the <strong>"Upload Completed Form"</strong> button below</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="border border-white/10 rounded-lg overflow-hidden bg-black/20">
-                  <iframe
-                    src={applicationForm.formUrl}
-                    className="w-full h-[500px]"
-                    title="Application Form Preview"
-                  />
-                </div>
+                  {/* Embedded PDF Viewer */}
+                  <div className="border border-white/10 rounded-lg overflow-hidden bg-black/30">
+                    <iframe
+                      src={`${applicationForm.formUrl}#toolbar=1&navpanes=0`}
+                      className="w-full"
+                      style={{ height: "700px" }}
+                      title="Application Form"
+                    />
+                  </div>
 
-                <div className="flex items-center gap-4">
-                  <Button
-                    className="bg-primary hover:bg-primary/90"
-                    onClick={() => window.open(applicationForm.formUrl, "_blank")}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Application Form
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {applicationForm.formFileName}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                  {/* Action buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      variant="outline"
+                      className="border-primary/30 text-primary hover:bg-primary/10 flex-1"
+                      onClick={() => {
+                        const link = document.createElement("a");
+                        link.href = applicationForm.formUrl;
+                        link.download = applicationForm.formFileName || "application-form.pdf";
+                        link.click();
+                      }}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Form ({applicationForm.formFileName})
+                    </Button>
+                  </div>
+
+                  {/* Upload completed form */}
+                  <div className="border-t border-white/10 pt-4">
+                    <p className="text-sm text-white font-medium mb-3 flex items-center gap-2">
+                      <Upload className="w-4 h-4 text-primary" />
+                      Upload Your Completed Application Form
+                    </p>
+                    <input
+                      ref={completedFormRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) setCompletedFormFile({ file: e.target.files[0] });
+                      }}
+                    />
+                    {completedFormFile ? (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                        <span className="text-green-400 flex-1 text-sm">{completedFormFile.file.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {(completedFormFile.file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCompletedFormFile(null)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="border-dashed border-white/20 hover:bg-white/5 w-full h-16"
+                        onClick={() => completedFormRef.current?.click()}
+                      >
+                        <div className="flex flex-col items-center gap-1">
+                          <Upload className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Click to upload your completed application form</span>
+                        </div>
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           ) : (
+            /* No application form — just show position summary */
             <Card className="bg-card border-white/5">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
@@ -346,48 +417,16 @@ export default function ApplyJob() {
                   Application Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <p className="text-muted-foreground">
                   This department does not require a specific application form.
-                  You can submit your resume and any supporting documents directly.
+                  Upload your resume and any supporting documents to apply.
                 </p>
               </CardContent>
             </Card>
           )}
 
-          {/* Show required documents info in review step */}
-          {hasDocRequirements && (
-            <Card className="bg-card border-white/5">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <File className="w-5 h-5 text-yellow-400" />
-                  Required Documents
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-muted-foreground text-sm">
-                  This department requires the following documents to be uploaded with your application:
-                </p>
-                <div className="space-y-2">
-                  {docRequirements.map((req: any) => (
-                    <div key={req.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
-                      <FileText className="w-4 h-4 text-primary shrink-0" />
-                      <div className="flex-1">
-                        <span className="text-sm text-white font-medium">{req.title}</span>
-                        {req.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{req.description}</p>
-                        )}
-                      </div>
-                      <Badge variant="outline" className={req.isRequired ? "border-red-500/30 text-red-400 text-[10px]" : "border-white/10 text-muted-foreground text-[10px]"}>
-                        {req.isRequired ? "Required" : "Optional"}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
+          {/* Position Summary */}
           <Card className="bg-card border-white/5">
             <CardHeader>
               <CardTitle className="text-white">Position Summary</CardTitle>
@@ -414,76 +453,90 @@ export default function ApplyJob() {
             </CardContent>
           </Card>
 
+          {/* Show required documents preview */}
+          {hasDocRequirements && (
+            <Card className="bg-card border-white/5">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <File className="w-5 h-5 text-yellow-400" />
+                  Documents You'll Need
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-muted-foreground text-sm">
+                  In the next step, you'll be asked to upload the following documents:
+                </p>
+                <div className="space-y-2">
+                  {docRequirements.map((req: any) => (
+                    <div key={req.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1">
+                        <span className="text-sm text-white font-medium">{req.title}</span>
+                        {req.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{req.description}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className={req.isRequired ? "border-red-500/30 text-red-400 text-[10px]" : "border-white/10 text-muted-foreground text-[10px]"}>
+                        {req.isRequired ? "Required" : "Optional"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="flex justify-end">
             <Button
               className="bg-primary hover:bg-primary/90 text-white px-8"
-              onClick={() => setStep("upload")}
+              onClick={() => setStep("documents")}
+              disabled={hasApplicationForm && !completedFormFile}
             >
-              Continue to Upload
-              <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
+              {hasApplicationForm && !completedFormFile ? (
+                "Upload completed form to continue"
+              ) : (
+                <>
+                  Continue to Documents
+                  <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
+                </>
+              )}
             </Button>
           </div>
         </div>
       )}
 
-      {step === "upload" && (
+      {/* ==================== STEP 2: DOCUMENTS & SUBMIT ==================== */}
+      {step === "documents" && (
         <div className="space-y-6">
-          {hasApplicationForm && (
+          {/* Completed form confirmation */}
+          {hasApplicationForm && completedFormFile && (
             <Card className="bg-card border-white/5">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-primary" />
-                  Completed Application Form *
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Upload your completed application form (PDF, DOC, or DOCX).
-                </p>
-                <input
-                  ref={applicationInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  className="hidden"
-                  onChange={(e) => handleFileSelect(e, "application")}
-                />
-                {applicationFile ? (
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                    <File className="w-5 h-5 text-green-500" />
-                    <span className="text-green-400 flex-1">{applicationFile.file.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {(applicationFile.file.size / 1024 / 1024).toFixed(2)} MB
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setApplicationFile(null)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm text-white font-medium">Application Form Uploaded</p>
+                    <p className="text-xs text-muted-foreground">{completedFormFile.file.name} — {(completedFormFile.file.size / 1024 / 1024).toFixed(2)} MB</p>
                   </div>
-                ) : (
                   <Button
-                    variant="outline"
-                    className="border-dashed border-white/20 hover:bg-white/5 w-full h-20"
-                    onClick={() => applicationInputRef.current?.click()}
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary hover:text-primary/80 text-xs"
+                    onClick={() => { setStep("form"); }}
                   >
-                    <div className="flex flex-col items-center gap-1">
-                      <Upload className="w-5 h-5 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Click to upload completed application</span>
-                    </div>
+                    Change
                   </Button>
-                )}
+                </div>
               </CardContent>
             </Card>
           )}
 
+          {/* Resume */}
           <Card className="bg-card border-white/5">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-blue-400" />
-                Resume / CV {!hasApplicationForm && "*"}
+                Resume / CV {!hasApplicationForm && <Badge variant="outline" className="border-red-500/30 text-red-400 text-[10px]">Required</Badge>}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -495,7 +548,9 @@ export default function ApplyJob() {
                 type="file"
                 accept=".pdf,.doc,.docx"
                 className="hidden"
-                onChange={(e) => handleFileSelect(e, "resume")}
+                onChange={(e) => {
+                  if (e.target.files?.[0]) setResumeFile({ file: e.target.files[0] });
+                }}
               />
               {resumeFile ? (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -516,7 +571,7 @@ export default function ApplyJob() {
               ) : (
                 <Button
                   variant="outline"
-                  className="border-dashed border-white/20 hover:bg-white/5 w-full h-20"
+                  className="border-dashed border-white/20 hover:bg-white/5 w-full h-16"
                   onClick={() => resumeInputRef.current?.click()}
                 >
                   <div className="flex flex-col items-center gap-1">
@@ -593,6 +648,7 @@ export default function ApplyJob() {
             </Card>
           )}
 
+          {/* Supporting Documents */}
           <Card className="bg-card border-white/5">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
@@ -610,7 +666,12 @@ export default function ApplyJob() {
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                 multiple
                 className="hidden"
-                onChange={(e) => handleFileSelect(e, "docs")}
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files) return;
+                  const newDocs = Array.from(files).map((f) => ({ file: f }));
+                  setSupportingDocs((prev) => [...prev, ...newDocs]);
+                }}
               />
 
               {supportingDocs.length > 0 && (
@@ -649,6 +710,7 @@ export default function ApplyJob() {
             </CardContent>
           </Card>
 
+          {/* Cover Letter */}
           <Card className="bg-card border-white/5">
             <CardHeader>
               <CardTitle className="text-white">Cover Letter (Optional)</CardTitle>
@@ -663,11 +725,12 @@ export default function ApplyJob() {
             </CardContent>
           </Card>
 
+          {/* Navigation */}
           <div className="flex justify-between">
             <Button
               variant="outline"
               className="border-white/10"
-              onClick={() => setStep("review")}
+              onClick={() => setStep("form")}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
