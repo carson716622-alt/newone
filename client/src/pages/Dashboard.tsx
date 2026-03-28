@@ -206,13 +206,18 @@ function OverviewSection({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge className={
-                    job.status === "approved" ? "bg-green-500/10 text-green-400 border-green-500/20" :
-                    job.status === "pending_approval"  ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" :
-                    "bg-red-500/10 text-red-400 border-red-500/20"
-                  }>{job.status === "pending_approval" ? "Pending" : job.status}</Badge>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <DeleteJobDialog jobId={job.id} jobTitle={job.title} onDeleted={refetchJobs} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge className={
+                      job.status === "approved" ? "bg-green-500/10 text-green-400 border-green-500/20" :
+                      job.status === "pending_approval"  ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" :
+                      "bg-red-500/10 text-red-400 border-red-500/20"
+                    }>{job.status === "pending_approval" ? "Pending" : job.status}</Badge>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -224,6 +229,59 @@ function OverviewSection({
 }
 
 /* ── tiny stat card ─────────────────────────────────────────── */
+function DeleteJobDialog({ jobId, jobTitle, onDeleted }: { jobId: number; jobTitle: string; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const deleteMut = trpc.jobs.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Job posting deleted successfully");
+      setOpen(false);
+      onDeleted();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to delete job posting");
+    }
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-400/10">
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px] bg-background border-white/10">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            Delete Job Posting
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground pt-2">
+            Are you sure you want to delete <span className="text-white font-semibold">"{jobTitle}"</span>?
+            This action cannot be undone and all associated applications will be lost.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-6 flex gap-3 sm:gap-0">
+          <Button variant="outline" onClick={() => setOpen(false)} className="border-white/10">
+            Cancel
+          </Button>
+          <Button 
+            variant="destructive" 
+            onClick={() => deleteMut.mutate({ jobId })}
+            disabled={deleteMut.isLoading}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {deleteMut.isLoading ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting...</>
+            ) : (
+              "Delete Posting"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function StatCard({ icon: Icon, iconCls, label, value }: { icon: any; iconCls: string; label: string; value: number }) {
   return (
     <Card className="bg-card/50 border-white/5 backdrop-blur-sm">

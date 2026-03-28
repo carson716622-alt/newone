@@ -453,15 +453,29 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to toggle featured status" });
         }
       }),
-    delete: publicProcedure
+    delete: protectedProcedure
       .input(z.object({
         jobId: z.number()
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
+          const job = await getJobPostingById(input.jobId);
+          if (!job) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Job posting not found" });
+          }
+          
+          // Allow if user is admin OR if user is agency admin and owns the job
+          const isAdmin = ctx.user.type === "admin";
+          const isAgencyOwner = ctx.user.type === "agency" && job.agencyId === (ctx.user.agencyId || ctx.user.id);
+          
+          if (!isAdmin && !isAgencyOwner) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to delete this job posting" });
+          }
+          
           await deleteJobPosting(input.jobId);
           return { success: true };
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete job posting" });
         }
       }),
