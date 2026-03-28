@@ -733,7 +733,24 @@ export async function getApplicationSubmissionsByCandidateId(candidateId: number
   if (!db) return [];
   
   try {
-    return await db.select().from(applicationSubmissions).where(eq(applicationSubmissions.candidateId, candidateId));
+    const rows = await db
+      .select({
+        id: applicationSubmissions.id,
+        jobId: applicationSubmissions.jobId,
+        candidateId: applicationSubmissions.candidateId,
+        status: applicationSubmissions.status,
+        submittedAt: applicationSubmissions.submittedAt,
+        jobTitle: jobPostings.title,
+        jobLocation: jobPostings.location,
+        agencyName: agencies.departmentName,
+        agencyLogo: agencies.logo,
+      })
+      .from(applicationSubmissions)
+      .leftJoin(jobPostings, eq(applicationSubmissions.jobId, jobPostings.id))
+      .leftJoin(agencies, eq(jobPostings.agencyId, agencies.id))
+      .where(eq(applicationSubmissions.candidateId, candidateId))
+      .orderBy(desc(applicationSubmissions.submittedAt));
+    return rows;
   } catch (error) {
     console.error("Error fetching candidate applications:", error);
     throw error;

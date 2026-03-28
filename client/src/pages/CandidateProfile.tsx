@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Upload, Plus, Edit2, Trash2, Calendar, MapPin, Award, FileText, User, Mail, Phone } from "lucide-react";
+import { Upload, Plus, Edit2, Trash2, Calendar, MapPin, Award, FileText, User, Mail, Phone, Briefcase, Building2, Clock, CheckCircle2, XCircle, Star, Eye, Loader2, ChevronRight } from "lucide-react";
 
 export default function CandidateProfile() {
   const { user, loading } = useAuth();
@@ -53,6 +53,17 @@ export default function CandidateProfile() {
   const { data: profile } = trpc.profiles.getMyProfile.useQuery();
   const { data: experience } = trpc.profiles.getExperience.useQuery();
   const { data: certifications } = trpc.profiles.getCertifications.useQuery();
+  const { data: applications, isLoading: applicationsLoading } = trpc.applications.getByCandidate.useQuery();
+
+  // Status config
+  const STATUS_CFG: Record<string, { label: string; cls: string; Icon: any }> = {
+    applied:     { label: "Applied",     cls: "bg-blue-500/10 text-blue-400 border-blue-500/20",     Icon: Clock },
+    reviewing:   { label: "Reviewing",   cls: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20", Icon: Eye },
+    shortlisted: { label: "Shortlisted", cls: "bg-green-500/10 text-green-400 border-green-500/20",  Icon: Star },
+    rejected:    { label: "Rejected",    cls: "bg-red-500/10 text-red-400 border-red-500/20",        Icon: XCircle },
+    offered:     { label: "Offered",     cls: "bg-purple-500/10 text-purple-400 border-purple-500/20", Icon: CheckCircle2 },
+    accepted:    { label: "Accepted",    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
+  };
 
   // Mutations
   const updateProfileMutation = trpc.profiles.updateProfile.useMutation();
@@ -240,12 +251,88 @@ export default function CandidateProfile() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="mb-8">
-        <TabsList className="grid w-full grid-cols-4 bg-background border border-white/5">
+        <TabsList className="grid w-full grid-cols-5 bg-background border border-white/5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="applications">Applications</TabsTrigger>
           <TabsTrigger value="experience">Experience</TabsTrigger>
           <TabsTrigger value="certifications">Certifications</TabsTrigger>
           <TabsTrigger value="resume">Resume</TabsTrigger>
         </TabsList>
+
+        {/* Applications Tab */}
+        <TabsContent value="applications">
+          <Card className="bg-card border-white/5">
+            <CardHeader>
+              <CardTitle>My Applications</CardTitle>
+              <CardDescription>Track the status of your submitted job applications</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {applicationsLoading ? (
+                <div className="text-center py-10">
+                  <Loader2 className="w-8 h-8 mx-auto animate-spin text-primary" />
+                  <p className="text-muted-foreground mt-2">Loading applications...</p>
+                </div>
+              ) : !applications || applications.length === 0 ? (
+                <div className="text-center py-12 bg-background/50 rounded-lg border border-dashed border-white/10">
+                  <Briefcase className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-20" />
+                  <h3 className="text-lg font-semibold text-white mb-1">No applications yet</h3>
+                  <p className="text-muted-foreground mb-6">You haven't applied to any positions yet.</p>
+                  <Button asChild variant="outline">
+                    <a href="/browse">Browse Jobs</a>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {applications.map((app: any) => {
+                    const status = STATUS_CFG[app.status] || STATUS_CFG.applied;
+                    const StatusIcon = status.Icon;
+                    return (
+                      <Card key={app.id} className="bg-background border-white/5 hover:border-primary/20 transition-colors">
+                        <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                              {app.agencyLogo ? (
+                                <img src={app.agencyLogo} alt={app.agencyName} className="w-8 h-8 object-contain" />
+                              ) : (
+                                <Building2 className="w-6 h-6 text-primary" />
+                              )}
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-white leading-tight mb-1">{app.jobTitle}</h3>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                <span className="flex items-center gap-1.5">
+                                  <Building2 className="w-3.5 h-3.5" /> {app.agencyName}
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <MapPin className="w-3.5 h-3.5" /> {app.jobLocation}
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5" /> Applied {new Date(app.submittedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between md:justify-end gap-4">
+                            <Badge className={`${status.cls} flex items-center gap-1.5 px-3 py-1`}>
+                              <StatusIcon className="w-3.5 h-3.5" />
+                              {status.label}
+                            </Badge>
+                            <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary hover:bg-primary/10">
+                              <a href={`/job/${app.jobId}`}>
+                                View Job <ChevronRight className="w-4 h-4 ml-1" />
+                              </a>
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Overview Tab */}
         <TabsContent value="overview">
