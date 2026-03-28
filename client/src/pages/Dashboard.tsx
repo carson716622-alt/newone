@@ -983,7 +983,7 @@ function ApplicationCard({ app, jobId, isExpanded, isPdfOpen, onToggleExpand, on
     { jobId, candidateId: app.candidateId },
     { enabled: isExpanded }
   );
-  const fullName = [app.candidateName, app.candidateLastName].filter(Boolean).join(" ") || `Candidate #${app.candidateId}`;
+  const fullName = app.candidateName || `Candidate #${app.candidateId}`;
 
   return (
     <Card className={`bg-card/50 border-white/5 transition-all ${

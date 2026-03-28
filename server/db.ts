@@ -712,8 +712,7 @@ export async function getApplicationSubmissionsByJobId(jobId: number) {
         notes: applicationSubmissions.notes,
         submittedAt: applicationSubmissions.submittedAt,
         updatedAt: applicationSubmissions.updatedAt,
-        candidateName: candidates.firstName,
-        candidateLastName: candidates.lastName,
+        candidateName: candidates.name,
         candidateEmail: candidates.email,
       })
       .from(applicationSubmissions)
@@ -721,7 +720,7 @@ export async function getApplicationSubmissionsByJobId(jobId: number) {
       .where(eq(applicationSubmissions.jobId, jobId));
     return rows.map(r => ({
       ...r,
-      candidateName: [r.candidateName, r.candidateLastName].filter(Boolean).join(" ") || `Candidate #${r.candidateId}`,
+      candidateName: r.candidateName || `Candidate #${r.candidateId}`,
     }));
   } catch (error) {
     console.error("Error fetching applications:", error);
