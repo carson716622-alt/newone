@@ -984,6 +984,20 @@ function ApplicationCard({ app, jobId, isExpanded, isPdfOpen, onToggleExpand, on
     { enabled: isExpanded }
   );
   const fullName = app.candidateName || `Candidate #${app.candidateId}`;
+  const [viewingDocId, setViewingDocId] = useState<number | null>(null);
+
+  const isViewableInline = (url: string) => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return lower.endsWith(".pdf") || lower.endsWith(".png") || lower.endsWith(".jpg") ||
+      lower.endsWith(".jpeg") || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".svg");
+  };
+  const isImage = (url: string) => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
+      lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".svg");
+  };
 
   return (
     <Card className={`bg-card/50 border-white/5 transition-all ${
@@ -1037,56 +1051,106 @@ function ApplicationCard({ app, jobId, isExpanded, isPdfOpen, onToggleExpand, on
                 <User className="w-3.5 h-3.5 mr-1.5" /> View Full Profile
               </Button>
               {app.submissionUrl && (
-                <>
-                  <Button variant="outline" size="sm" className="border-white/10 text-xs h-8"
-                    onClick={() => window.open(app.submissionUrl, "_blank")}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" /> Download Application
-                  </Button>
-                  <Button variant="outline" size="sm" className={`border-white/10 text-xs h-8 ${
-                    isPdfOpen ? "bg-primary/10 border-primary/30 text-primary" : ""
-                  }`} onClick={onTogglePdf}>
-                    <Eye className="w-3.5 h-3.5 mr-1.5" /> {isPdfOpen ? "Hide PDF" : "View PDF"}
-                  </Button>
-                </>
+                <Button variant="outline" size="sm" className={`border-white/10 text-xs h-8 ${
+                  isPdfOpen ? "bg-primary/10 border-primary/30 text-primary" : ""
+                }`} onClick={onTogglePdf}>
+                  <Eye className="w-3.5 h-3.5 mr-1.5" /> {isPdfOpen ? "Hide Application Form" : "View Application Form"}
+                </Button>
               )}
             </div>
 
-            {/* Inline PDF viewer */}
+            {/* Inline application PDF viewer */}
             {isPdfOpen && app.submissionUrl && (
               <div className="px-5 pb-4">
-                <div className="rounded-lg overflow-hidden border border-white/10 bg-white">
-                  <iframe
-                    src={app.submissionUrl}
-                    className="w-full"
-                    style={{ height: "600px" }}
-                    title={`Application from ${fullName}`}
-                  />
+                <div className="rounded-lg overflow-hidden border border-white/10">
+                  <div className="bg-slate-800 px-4 py-2 flex items-center justify-between">
+                    <span className="text-sm text-white font-medium flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-primary" /> Submitted Application Form
+                    </span>
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white h-7 text-xs"
+                      onClick={() => window.open(app.submissionUrl, "_blank")}>
+                      <Download className="w-3.5 h-3.5 mr-1" /> Download
+                    </Button>
+                  </div>
+                  <div className="bg-white">
+                    <iframe
+                      src={app.submissionUrl}
+                      className="w-full"
+                      style={{ height: "650px" }}
+                      title={`Application from ${fullName}`}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Uploaded documents */}
+            {/* Uploaded documents with inline viewers */}
             {docs && docs.length > 0 && (
               <div className="px-5 pb-4">
                 <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
                   <ClipboardList className="w-4 h-4 text-primary" /> Uploaded Documents ({docs.length})
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {docs.map((doc: any) => (
-                    <div key={doc.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] border border-white/5">
-                      <FileText className="w-4 h-4 text-primary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{doc.title || doc.fileName}</p>
-                        <p className="text-xs text-muted-foreground">{doc.fileName}</p>
+                <div className="space-y-3">
+                  {docs.map((doc: any) => {
+                    const docUrl = doc.fileUrl || "";
+                    const canView = isViewableInline(docUrl);
+                    const isImg = isImage(docUrl);
+                    const isViewing = viewingDocId === doc.id;
+
+                    return (
+                      <div key={doc.id} className="rounded-lg border border-white/5 overflow-hidden">
+                        {/* Doc header row */}
+                        <div className="flex items-center gap-3 p-3 bg-white/[0.03]">
+                          <FileText className="w-4 h-4 text-primary shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate">{doc.title || doc.fileName}</p>
+                            <p className="text-xs text-muted-foreground">{doc.fileName}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {canView && (
+                              <Button variant="ghost" size="sm"
+                                className={`text-xs h-7 px-2 ${
+                                  isViewing ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-white"
+                                }`}
+                                onClick={() => setViewingDocId(isViewing ? null : doc.id)}>
+                                <Eye className="w-3.5 h-3.5 mr-1" /> {isViewing ? "Hide" : "View"}
+                              </Button>
+                            )}
+                            {docUrl && (
+                              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white h-7 w-7 p-0"
+                                onClick={() => window.open(docUrl, "_blank")} title="Download">
+                                <Download className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Inline viewer */}
+                        {isViewing && docUrl && (
+                          <div className="border-t border-white/5">
+                            {isImg ? (
+                              <div className="p-4 bg-slate-900/50 flex items-center justify-center">
+                                <img
+                                  src={docUrl}
+                                  alt={doc.title || doc.fileName}
+                                  className="max-w-full max-h-[500px] rounded-lg object-contain"
+                                />
+                              </div>
+                            ) : (
+                              <div className="bg-white">
+                                <iframe
+                                  src={docUrl}
+                                  className="w-full"
+                                  style={{ height: "550px" }}
+                                  title={doc.title || doc.fileName}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {doc.fileUrl && (
-                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white shrink-0 h-7 w-7 p-0"
-                          onClick={() => window.open(doc.fileUrl, "_blank")}>
-                          <Download className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
