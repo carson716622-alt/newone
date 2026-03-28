@@ -18,125 +18,106 @@ import {
   Search,
   Filter,
   Mail,
-  Star
+  Star,
+  Loader2,
+  Trash2
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { notificationService, EmailLog } from "@/lib/notificationService";
-import { jobService, Job } from "@/lib/jobService";
 import { useAuth } from "@/contexts/AuthContext";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 export default function AdminPanel() {
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const { user } = useAuth();
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
-  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [pendingJobs, setPendingJobs] = useState<Job[]>([]);
-  const [approvedJobs, setApprovedJobs] = useState<Job[]>([]);
   const [activeTab, setActiveTab] = useState<'pending' | 'approved'>('pending');
 
-  useEffect(() => {
-    const unsubscribe = notificationService.subscribe(setEmailLogs);
-    loadPendingJobs();
-    loadApprovedJobs();
-    return () => unsubscribe();
-  }, []);
+  // Fetch jobs from the real database via tRPC
+  const { data: pendingJobs = [], isLoading: pendingLoading, refetch: refetchPending } = trpc.jobs.getPending.useQuery();
+  const { data: approvedJobs = [], isLoading: approvedLoading, refetch: refetchApproved } = trpc.jobs.getApproved.useQuery();
+  const { data: agencies = [] } = trpc.jobs.getAgencies.useQuery();
 
-  const loadPendingJobs = () => {
-    const allJobs = jobService.getAllJobs();
-    const pending = allJobs.filter(job => job.status === 'pending');
-    setPendingJobs(pending);
-    
-    if (selectedJob && !pending.find(j => j.id === selectedJob.id)) {
-      setSelectedJob(null);
-    }
-  };
+  // Mutations
+  const approveMut = trpc.jobs.approve.useMutation({
+    onSuccess: () => {
+      toast.success("Job approved successfully!");
+      refetchPending();
+      refetchApproved();
+      setSelectedJobId(null);
+    },
+    onError: (err) => toast.error(err.message || "Failed to approve job"),
+  });
 
-  const loadApprovedJobs = () => {
-    const allJobs = jobService.getAllJobs();
-    const approved = allJobs.filter(job => job.status === 'active');
-    setApprovedJobs(approved);
-  };
-
-  const handleApprove = async (job: Job) => {
-    try {
-      jobService.updateJobStatus(job.id, 'active');
-      
-      toast.promise(
-        notificationService.sendApprovalEmail("agency@example.com", job.title),
-        {
-          loading: 'Approving and sending email...',
-          success: 'Job approved and notification sent!',
-          error: 'Failed to send notification',
-        }
-      );
-      
-      loadPendingJobs();
-      loadApprovedJobs();
-    } catch (error) {
-      toast.error("Failed to approve job");
-    }
-  };
-
-  const handleReject = async () => {
-    if (!rejectionReason) {
-      toast.error("Please provide a rejection reason");
-      return;
-    }
-
-    if (!selectedJob) return;
-
-    try {
-      jobService.updateJobStatus(selectedJob.id, 'rejected', rejectionReason);
-
-      toast.promise(
-        notificationService.sendRejectionEmail("agency@example.com", selectedJob.title, rejectionReason),
-        {
-          loading: 'Rejecting and sending email...',
-          success: 'Job rejected and notification sent!',
-          error: 'Failed to send notification',
-        }
-      );
-      
+  const rejectMut = trpc.jobs.reject.useMutation({
+    onSuccess: () => {
+      toast.success("Job rejected.");
+      refetchPending();
       setIsRejectDialogOpen(false);
       setRejectionReason("");
-      loadPendingJobs();
-    } catch (error) {
-      toast.error("Failed to reject job");
-    }
-  };
+      setSelectedJobId(null);
+    },
+    onError: (err) => toast.error(err.message || "Failed to reject job"),
+  });
 
-  const handleToggleFeatured = async (job: Job) => {
-    try {
-      const isFeatured = !job.isFeatured;
-      jobService.updateJobFeatured(job.id, isFeatured);
-      toast.success(isFeatured ? 'Job marked as featured!' : 'Job removed from featured');
-      loadApprovedJobs();
-    } catch (error) {
-      toast.error('Failed to toggle featured status');
-    }
-  };
+  const toggleFeaturedMut = trpc.jobs.toggleFeatured.useMutation({
+    onSuccess: (_, vars) => {
+      toast.success(vars.isFeatured ? "Job marked as featured!" : "Job removed from featured");
+      refetchApproved();
+    },
+    onError: (err) => toast.error(err.message || "Failed to toggle featured"),
+  });
 
-  const handleDelete = async (job: Job) => {
-    if (!confirm(`Are you sure you want to delete "${job.title}"? This action cannot be undone.`)) {
-      return;
-    }
+  const deleteMut = trpc.jobs.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Job deleted.");
+      refetchPending();
+      refetchApproved();
+      setSelectedJobId(null);
+    },
+    onError: (err) => toast.error(err.message || "Failed to delete job"),
+  });
 
-    try {
-      jobService.deleteJob(job.id);
-      toast.success('Job deleted successfully');
-      loadPendingJobs();
-      loadApprovedJobs();
-      setSelectedJob(null);
-    } catch (error) {
-      toast.error('Failed to delete job');
-    }
+  // Helper: get agency name by ID
+  const getAgencyName = (agencyId: number) => {
+    const agency = (agencies as any[]).find((a: any) => a.id === agencyId);
+    return agency?.departmentName || `Agency #${agencyId}`;
   };
 
   const currentJobs = activeTab === 'pending' ? pendingJobs : approvedJobs;
+  const selectedJob = (currentJobs as any[]).find((j: any) => j.id === selectedJobId) || null;
+  const isLoading = pendingLoading || approvedLoading;
+
+  const handleApprove = (job: any) => {
+    approveMut.mutate({ jobId: job.id, adminId: user?.id || 1 });
+  };
+
+  const handleReject = () => {
+    if (!selectedJob) return;
+    rejectMut.mutate({ jobId: selectedJob.id });
+  };
+
+  const handleToggleFeatured = (job: any) => {
+    toggleFeaturedMut.mutate({ jobId: job.id, isFeatured: !job.isFeatured });
+  };
+
+  const handleDelete = (job: any) => {
+    if (!confirm(`Are you sure you want to delete "${job.title}"? This action cannot be undone.`)) return;
+    deleteMut.mutate({ jobId: job.id });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col w-full min-h-screen items-center justify-center">
+        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground">Loading admin panel...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container py-10 min-h-screen">
@@ -165,41 +146,8 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* Email Logs Section (For Demo/Debugging) */}
-      {emailLogs.length > 0 && (
-        <div className="mb-8 animate-in fade-in slide-in-from-top-5 duration-500">
-          <Card className="bg-card border-white/5">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                <Mail className="w-4 h-4" /> System Email Logs (Simulation)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[150px]">
-                <div className="space-y-2">
-                  {emailLogs.map((log) => (
-                    <div key={log.id} className="text-sm p-3 rounded bg-background/50 border border-white/5 flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className={log.type === 'approval' ? 'text-green-400 border-green-400/20' : 'text-red-400 border-red-400/20'}>
-                            {log.type === 'approval' ? 'Approved' : 'Rejected'}
-                          </Badge>
-                          <span className="font-bold text-white">{log.subject}</span>
-                        </div>
-                        <p className="text-muted-foreground text-xs line-clamp-1">{log.body}</p>
-                      </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-4">{log.timestamp}</span>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       {/* Tabs for Pending and Approved */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pending' | 'approved')} className="mb-6">
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'pending' | 'approved'); setSelectedJobId(null); }} className="mb-6">
         <TabsList className="grid w-full grid-cols-2 bg-background border border-white/5">
           <TabsTrigger value="pending" className="data-[state=active]:bg-primary/20">
             Pending Review ({pendingJobs.length})
@@ -215,43 +163,49 @@ export default function AdminPanel() {
         <div className="lg:col-span-1 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-white">
-              {activeTab === 'pending' ? 'Submission Queue' : 'Featured Management'}
+              {activeTab === 'pending' ? 'Submission Queue' : 'Approved Jobs'}
             </h2>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white">
-              <Filter className="w-4 h-4 mr-2" /> Filter
-            </Button>
           </div>
           
           <ScrollArea className="h-[calc(100vh-350px)] pr-4">
             <div className="space-y-3">
-              {currentJobs.length === 0 ? (
+              {(currentJobs as any[]).length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground border border-dashed border-white/10 rounded-lg">
                   <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>All caught up!</p>
                   <p className="text-xs">No {activeTab === 'pending' ? 'pending' : 'approved'} jobs.</p>
                 </div>
               ) : (
-                currentJobs.map((job) => (
+                (currentJobs as any[]).map((job: any) => (
                   <Card 
                     key={job.id} 
-                    className={`cursor-pointer transition-all hover:border-primary/50 ${selectedJob?.id === job.id ? 'border-primary bg-primary/5' : 'bg-card border-white/5'}`}
-                    onClick={() => setSelectedJob(job)}
+                    className={`cursor-pointer transition-all hover:border-primary/50 ${selectedJobId === job.id ? 'border-primary bg-primary/5' : 'bg-card border-white/5'}`}
+                    onClick={() => setSelectedJobId(job.id)}
                   >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex gap-2">
-                          <Badge variant="outline" className={`text-[10px] ${activeTab === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : job.isFeatured ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
+                          <Badge variant="outline" className={`text-[10px] ${
+                            activeTab === 'pending' 
+                              ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' 
+                              : job.isFeatured 
+                                ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' 
+                                : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                          }`}>
                             {activeTab === 'pending' ? 'Pending' : job.isFeatured ? 'Featured' : 'Active'}
                           </Badge>
                         </div>
-                        <span className="text-xs text-muted-foreground">{job.postedDate}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(job.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
                       <h3 className="font-bold text-white mb-1">{job.title}</h3>
                       <p className="text-sm text-muted-foreground flex items-center gap-1 mb-2">
-                        <Building2 className="w-3 h-3" /> {job.department}
+                        <Building2 className="w-3 h-3" /> {getAgencyName(job.agencyId)}
                       </p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {job.city}, {job.state}</span>
+                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {job.location}</span>
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {job.jobType}</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -275,12 +229,11 @@ export default function AdminPanel() {
                     <div>
                       <h2 className="text-2xl font-heading font-bold text-white">{selectedJob.title}</h2>
                       <div className="flex items-center gap-2 text-primary font-medium mt-1">
-                        <Building2 className="w-4 h-4" /> {selectedJob.department}
+                        <Building2 className="w-4 h-4" /> {getAgencyName(selectedJob.agencyId)}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {selectedJob.city}, {selectedJob.state}</span>
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {selectedJob.type}</span>
-                        <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> {selectedJob.category}</span>
+                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {selectedJob.location}</span>
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {selectedJob.jobType}</span>
                       </div>
                     </div>
                   </div>
@@ -291,25 +244,38 @@ export default function AdminPanel() {
                           variant="outline" 
                           className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/50"
                           onClick={() => setIsRejectDialogOpen(true)}
+                          disabled={rejectMut.isPending}
                         >
                           <XCircle className="w-4 h-4 mr-2" /> Reject
                         </Button>
                         <Button 
                           className="bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)]"
                           onClick={() => handleApprove(selectedJob)}
+                          disabled={approveMut.isPending}
                         >
-                          <CheckCircle2 className="w-4 h-4 mr-2" /> Approve
+                          <CheckCircle2 className="w-4 h-4 mr-2" /> {approveMut.isPending ? "Approving..." : "Approve"}
                         </Button>
                       </>
                     ) : (
-                      <Button 
-                        variant={selectedJob?.isFeatured ? "default" : "outline"}
-                        className={selectedJob?.isFeatured ? "bg-amber-600 hover:bg-amber-500" : "border-amber-500/30 text-amber-400 hover:bg-amber-500/10"}
-                        onClick={() => handleToggleFeatured(selectedJob)}
-                      >
-                        <Star className="w-4 h-4 mr-2" fill={selectedJob?.isFeatured ? "currentColor" : "none"} /> 
-                        {selectedJob?.isFeatured ? 'Unfeature' : 'Feature'}
-                      </Button>
+                      <>
+                        <Button 
+                          variant={selectedJob?.isFeatured ? "default" : "outline"}
+                          className={selectedJob?.isFeatured ? "bg-amber-600 hover:bg-amber-500" : "border-amber-500/30 text-amber-400 hover:bg-amber-500/10"}
+                          onClick={() => handleToggleFeatured(selectedJob)}
+                          disabled={toggleFeaturedMut.isPending}
+                        >
+                          <Star className="w-4 h-4 mr-2" fill={selectedJob?.isFeatured ? "currentColor" : "none"} /> 
+                          {selectedJob?.isFeatured ? 'Unfeature' : 'Feature'}
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                          onClick={() => handleDelete(selectedJob)}
+                          disabled={deleteMut.isPending}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -322,26 +288,41 @@ export default function AdminPanel() {
                     <p className="text-lg font-medium text-white mt-1">{selectedJob.salary || "Not specified"}</p>
                   </div>
                   <div className="p-4 rounded-lg bg-background/50 border border-white/5">
-                    <Label className="text-xs uppercase text-muted-foreground font-bold">Application Link</Label>
-                    <a href={selectedJob.applyUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 mt-1 truncate">
-                      {selectedJob.applyUrl} <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <Label className="text-xs uppercase text-muted-foreground font-bold">Deadline</Label>
+                    <p className="text-lg font-medium text-white mt-1">
+                      {selectedJob.deadline ? new Date(selectedJob.deadline).toLocaleDateString() : "No deadline"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="p-4 rounded-lg bg-background/50 border border-white/5">
+                    <Label className="text-xs uppercase text-muted-foreground font-bold">Posted</Label>
+                    <p className="text-sm font-medium text-white mt-1">
+                      {new Date(selectedJob.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-background/50 border border-white/5">
+                    <Label className="text-xs uppercase text-muted-foreground font-bold">Agency ID</Label>
+                    <p className="text-sm font-medium text-white mt-1">#{selectedJob.agencyId}</p>
                   </div>
                 </div>
 
                 <div>
-                  <Label className="text-xs uppercase text-muted-foreground font-bold mb-2 block">Position Overview</Label>
-                  <div className="prose prose-invert max-w-none bg-background/30 p-4 rounded-lg border border-white/5" dangerouslySetInnerHTML={{ __html: selectedJob.overview }} />
+                  <Label className="text-xs uppercase text-muted-foreground font-bold mb-2 block">Position Description</Label>
+                  <div className="prose prose-invert max-w-none bg-background/30 p-4 rounded-lg border border-white/5" dangerouslySetInnerHTML={{ __html: selectedJob.description }} />
                 </div>
 
-                <div>
-                  <Label className="text-xs uppercase text-muted-foreground font-bold mb-2 block">Requirements</Label>
-                  <div className="prose prose-invert max-w-none bg-background/30 p-4 rounded-lg border border-white/5" dangerouslySetInnerHTML={{ __html: selectedJob.requirements }} />
-                </div>
+                {selectedJob.requirements && (
+                  <div>
+                    <Label className="text-xs uppercase text-muted-foreground font-bold mb-2 block">Requirements</Label>
+                    <div className="prose prose-invert max-w-none bg-background/30 p-4 rounded-lg border border-white/5" dangerouslySetInnerHTML={{ __html: selectedJob.requirements }} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground border border-dashed border-white/10 rounded-lg bg-card/30">
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground border border-dashed border-white/10 rounded-lg bg-card/30 min-h-[400px]">
               <FileText className="w-12 h-12 mb-4 opacity-20" />
               <p className="text-lg font-medium">Select a job to review</p>
               <p className="text-sm">Choose a {activeTab === 'pending' ? 'pending submission' : 'job'} from the queue</p>
@@ -370,8 +351,9 @@ export default function AdminPanel() {
             <Button 
               className="bg-red-600 hover:bg-red-500" 
               onClick={handleReject}
+              disabled={rejectMut.isPending}
             >
-              Reject
+              {rejectMut.isPending ? "Rejecting..." : "Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>
