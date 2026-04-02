@@ -1,59 +1,48 @@
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { createSessionToken } from "./_core/customAuth";
-import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
+import { COOKIE_NAME } from "../shared/const.js";
+import { getSessionCookieOptions } from "./_core/cookies";
+import { systemRouter } from "./_core/systemRouter";
+import { publicProcedure, router } from "./_core/trpc";
+import { sdk } from "./_core/sdk";
 import { TRPCError } from "@trpc/server";
-import * as bcrypt from "bcryptjs";
-import {
-  getSiteAdminByEmail, createSiteAdmin,
-  getAgencyByEmail, getAgencyById, createAgency,
-  getAgencyAdminByEmail, getAgencyAdminById, createAgencyAdmin,
-  getCandidateByEmail, getCandidateById, createCandidate,
-  getJobPostingById, getJobPostingsByAgencyId, getApprovedJobs, getPendingJobs, getFeaturedJobs, toggleJobFeatured,
-  createJobPosting, updateJobPostingStatus, deleteJobPosting,
-  createJobApplication, getApplicationsByJobId, getApplicationsByCandidateId,
-  createNotification, getNotifications,
-  createJobView, getJobViewCount,
-  getCandidateProfile, upsertCandidateProfile, updateCandidateProfilePicture, updateCandidateResume,
-  getJobExperience, addJobExperience, updateJobExperience, deleteJobExperience,
-  getCandidateCertifications, addCertification, updateCertification, deleteCertification,
-  getAllCandidateProfiles, getAllAgencies,
-  getOrCreateConversation, getConversationById, getCandidateConversations, getAgencyConversations,
-  getConversationMessages, sendMessage, markMessagesAsRead, getUnreadMessageCount, getTotalUnreadMessages,
-  uploadApplicationForm, getApplicationFormByJobId, submitApplication, getApplicationSubmissionsByJobId, getApplicationSubmissionsByCandidateId, getApplicationSubmission, updateApplicationStatus,
-  createDocumentRequirements, getDocumentRequirements, deleteDocumentRequirements, createCandidateDocUpload, getCandidateDocUploads
-} from "./db";
+import * as db from "./db";
 
-// Hash password helper
-async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+function generateInviteCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
-// Compare password helper
-async function comparePassword(password: string, hash: string): Promise<boolean> {
-  if (!hash) return false;
-
-  // Backward compatibility for legacy records that may contain plaintext passwords.
-  // New records are always stored as bcrypt hashes.
-  const isBcryptHash = hash.startsWith("$2a$") || hash.startsWith("$2b$") || hash.startsWith("$2y$");
-  if (!isBcryptHash) {
-    return password === hash;
+async function getAppUserFromCtx(ctx: any) {
+  const authHeader = ctx.req.headers.authorization || ctx.req.headers.Authorization;
+  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
   }
-
-  try {
-    return await bcrypt.compare(password, hash);
-  } catch {
-    return false;
+  const token = authHeader.slice("Bearer ".length).trim();
+  const session = await sdk.verifySession(token);
+  if (!session || !session.openId) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid session" });
   }
+  const userId = parseInt(session.openId, 10);
+  if (isNaN(userId)) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid session data" });
+  }
+  const user = await db.getAppUserById(userId);
+  if (!user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "User not found" });
+  }
+  return user;
 }
 
 export const appRouter = router({
   system: systemRouter,
-  
+
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -61,958 +50,200 @@ export const appRouter = router({
     }),
   }),
 
-  // ========== SITE ADMIN AUTHENTICATION ==========
-  adminAuth: router({
+  appAuth: router({
+    register: publicProcedure
+      .input(z.object({
+        email: z.string().email().max(320),
+        password: z.string().min(6).max(100),
+        displayName: z.string().min(1).max(100),
+      }))
+      .mutation(async ({ input }) => {
+        const existing = await db.getAppUserByEmail(input.email);
+        if (existing) {
+          throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
+        }
+        const passwordHash = await bcrypt.hash(input.password, 12);
+        let inviteCode = generateInviteCode();
+        let attempts = 0;
+        while (await db.getAppUserByInviteCode(inviteCode)) {
+          inviteCode = generateInviteCode();
+          attempts++;
+          if (attempts > 10) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not generate unique invite code" });
+        }
+        const userId = await db.createAppUser({
+          email: input.email.toLowerCase(),
+          passwordHash,
+          displayName: input.displayName,
+          inviteCode,
+        });
+        const sessionToken = await sdk.createSessionToken(String(userId), {
+          name: input.displayName,
+          expiresInMs: 365 * 24 * 60 * 60 * 1000,
+        });
+        const user = await db.getAppUserById(userId);
+        return {
+          token: sessionToken,
+          user: user ? {
+            id: user.id, email: user.email, displayName: user.displayName,
+            inviteCode: user.inviteCode, coupleId: user.coupleId,
+          } : null,
+        };
+      }),
+
     login: publicProcedure
       .input(z.object({
         email: z.string().email(),
-        password: z.string()
-      }))
-      .mutation(async ({ input, ctx }) => {
-        try {
-          const admin = await getSiteAdminByEmail(input.email);
-          if (!admin) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-          }
-
-          const passwordMatch = await comparePassword(input.password, admin.passwordHash);
-          if (!passwordMatch) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-          }
-
-          // Create and set JWT session cookie
-          const token = await createSessionToken({
-            id: admin.id,
-            type: "admin",
-            email: admin.email,
-            name: admin.name || ""
-          });
-          
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-
-          return {
-            success: true,
-            admin: {
-              id: admin.id,
-              email: admin.email,
-              name: admin.name
-            }
-          };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Login failed" });
-        }
-      }),
-
-    register: publicProcedure
-      .input(z.object({
-        email: z.string().email(),
-        password: z.string().min(8),
-        name: z.string().min(2)
+        password: z.string().min(1),
       }))
       .mutation(async ({ input }) => {
-        try {
-          const existing = await getSiteAdminByEmail(input.email);
-          if (existing) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
-          }
-
-          const passwordHash = await hashPassword(input.password);
-          await createSiteAdmin({
-            email: input.email,
-            passwordHash,
-            name: input.name
-          });
-
-          return { success: true, message: "Admin account created" };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Registration failed" });
-        }
+        const user = await db.getAppUserByEmail(input.email);
+        if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+        const valid = await bcrypt.compare(input.password, user.passwordHash);
+        if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+        const sessionToken = await sdk.createSessionToken(String(user.id), {
+          name: user.displayName,
+          expiresInMs: 365 * 24 * 60 * 60 * 1000,
+        });
+        return {
+          token: sessionToken,
+          user: {
+            id: user.id, email: user.email, displayName: user.displayName,
+            inviteCode: user.inviteCode, coupleId: user.coupleId,
+          },
+        };
       }),
+
+    me: publicProcedure.query(async ({ ctx }) => {
+      try {
+        const user = await getAppUserFromCtx(ctx);
+        let partnerName: string | null = null;
+        if (user.coupleId) {
+          const couple = await db.getCoupleById(user.coupleId);
+          if (couple) {
+            const partnerId = couple.user1Id === user.id ? couple.user2Id : couple.user1Id;
+            const partner = await db.getAppUserById(partnerId);
+            partnerName = partner?.displayName ?? null;
+          }
+        }
+        return {
+          id: user.id, email: user.email, displayName: user.displayName,
+          inviteCode: user.inviteCode, coupleId: user.coupleId, partnerName,
+        };
+      } catch { return null; }
+    }),
   }),
 
-  // ========== AGENCY AUTHENTICATION ==========
-  agencyAuth: router({
-    login: publicProcedure
-      .input(z.object({
-        email: z.string().email(),
-        password: z.string()
-      }))
-      .mutation(async ({ input, ctx }) => {
-        try {
-          const admin = await getAgencyAdminByEmail(input.email);
-          if (!admin) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-          }
-
-          const passwordMatch = await comparePassword(input.password, admin.passwordHash);
-          if (!passwordMatch) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-          }
-
-	          // Create and set JWT session cookie
-	          const token = await createSessionToken({
-	            id: admin.id,
-	            type: "agency",
-	            email: admin.email,
-	            name: admin.name || "",
-	            agencyId: admin.agencyId
-	          });
-          
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-
-          const agency = await getAgencyById(admin.agencyId);
-          return {
-            success: true,
-            admin: {
-              id: admin.id,
-              email: admin.email,
-              name: admin.name,
-              agencyId: admin.agencyId
-            },
-            agency: agency ? {
-              id: agency.id,
-              departmentName: agency.departmentName,
-              logo: agency.logo
-            } : null
-          };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Login failed" });
-        }
+  couple: router({
+    joinByCode: publicProcedure
+      .input(z.object({ inviteCode: z.string().min(1).max(8) }))
+      .mutation(async ({ ctx, input }) => {
+        const currentUser = await getAppUserFromCtx(ctx);
+        if (currentUser.coupleId) throw new TRPCError({ code: "BAD_REQUEST", message: "You are already paired" });
+        const partner = await db.getAppUserByInviteCode(input.inviteCode);
+        if (!partner) throw new TRPCError({ code: "NOT_FOUND", message: "Invalid invite code" });
+        if (partner.id === currentUser.id) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot pair with yourself" });
+        if (partner.coupleId) throw new TRPCError({ code: "BAD_REQUEST", message: "This person is already paired" });
+        const coupleId = await db.createCouple({ user1Id: currentUser.id, user2Id: partner.id });
+        await db.updateAppUserCouple(currentUser.id, coupleId);
+        await db.updateAppUserCouple(partner.id, coupleId);
+        return { coupleId, partnerName: partner.displayName };
       }),
 
-    register: publicProcedure
-      .input(z.object({
-        departmentName: z.string().min(2),
-        address: z.string().min(5),
-        phone: z.string().min(10),
-        email: z.string().email(),
-        website: z.string().url(),
-        numberOfOfficers: z.number().positive(),
-        adminName: z.string().min(2),
-        password: z.string().min(8),
-        logo: z.string().optional()
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          // Check if agency email already exists
-          const existingAgency = await getAgencyByEmail(input.email);
-          if (existingAgency) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Agency email already registered" });
-          }
-
-          // Check if admin email already exists
-          const existingAdmin = await getAgencyAdminByEmail(input.email);
-          if (existingAdmin) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
-          }
-
-          // Create agency
-          const agencyResult = await createAgency({
-            departmentName: input.departmentName,
-            address: input.address,
-            phone: input.phone,
-            email: input.email,
-            website: input.website,
-            numberOfOfficers: input.numberOfOfficers,
-            logo: input.logo,
-            isVerified: false
-          });
-
-          // In Drizzle with MySQL, the result is an array where the first element is the ResultSetHeader
-          const agencyId = (agencyResult as any)[0]?.insertId || (agencyResult as any).insertId;
-          
-          if (!agencyId) {
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to get agency ID after creation" });
-          }
-
-          // Create agency admin
-          const passwordHash = await hashPassword(input.password);
-          await createAgencyAdmin({
-            agencyId,
-            email: input.email,
-            passwordHash,
-            name: input.adminName,
-            role: "admin"
-          });
-
-          return { success: true, message: "Agency registered successfully", agencyId };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Registration failed" });
-        }
-      }),
+    getPartner: publicProcedure.query(async ({ ctx }) => {
+      const user = await getAppUserFromCtx(ctx);
+      if (!user.coupleId) return null;
+      const couple = await db.getCoupleById(user.coupleId);
+      if (!couple) return null;
+      const partnerId = couple.user1Id === user.id ? couple.user2Id : couple.user1Id;
+      const partner = await db.getAppUserById(partnerId);
+      return partner ? { id: partner.id, displayName: partner.displayName } : null;
+    }),
   }),
 
-  // ========== CANDIDATE AUTHENTICATION ==========
-  candidateAuth: router({
-    login: publicProcedure
-      .input(z.object({
-        email: z.string().email(),
-        password: z.string()
-      }))
-      .mutation(async ({ input, ctx }) => {
-        try {
-          const candidate = await getCandidateByEmail(input.email);
-          if (!candidate) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-          }
+  hearts: router({
+    send: publicProcedure.mutation(async ({ ctx }) => {
+      const user = await getAppUserFromCtx(ctx);
+      if (!user.coupleId) throw new TRPCError({ code: "BAD_REQUEST", message: "Pair with someone first" });
+      const couple = await db.getCoupleById(user.coupleId);
+      if (!couple) throw new TRPCError({ code: "NOT_FOUND", message: "Couple not found" });
+      const receiverId = couple.user1Id === user.id ? couple.user2Id : couple.user1Id;
+      await db.sendHeart({ senderId: user.id, receiverId, coupleId: user.coupleId });
+      const todayCount = await db.getTodayHeartCount(user.id);
+      const totalCounts = await db.getHeartCountForUser(user.id);
+      return { todayCount, totalSent: totalCounts.sent, totalReceived: totalCounts.received };
+    }),
 
-          const passwordMatch = await comparePassword(input.password, candidate.passwordHash);
-          if (!passwordMatch) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid credentials" });
-          }
-
-          // Create and set JWT session cookie
-          const token = await createSessionToken({
-            id: candidate.id,
-            type: "candidate",
-            email: candidate.email,
-            name: candidate.name || ""
-          });
-          
-          const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-
-          return {
-            success: true,
-            candidate: {
-              id: candidate.id,
-              email: candidate.email,
-              name: candidate.name
-            }
-          };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Login failed" });
-        }
-      }),
-
-    register: publicProcedure
-      .input(z.object({
-        name: z.string().min(2),
-        email: z.string().email(),
-        password: z.string().min(8)
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          const existing = await getCandidateByEmail(input.email);
-          if (existing) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Email already registered" });
-          }
-
-          const passwordHash = await hashPassword(input.password);
-          const result = await createCandidate({
-            name: input.name,
-            email: input.email,
-            passwordHash
-          });
-
-          return { success: true, message: "Candidate account created" };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Registration failed" });
-        }
-      }),
+    getStats: publicProcedure.query(async ({ ctx }) => {
+      const user = await getAppUserFromCtx(ctx);
+      if (!user.coupleId) return { todaySent: 0, totalSent: 0, totalReceived: 0, recentHearts: [] };
+      const todaySent = await db.getTodayHeartCount(user.id);
+      const counts = await db.getHeartCountForUser(user.id);
+      const recentHearts = await db.getHeartsByCoupleId(user.coupleId, 20);
+      return {
+        todaySent, totalSent: counts.sent, totalReceived: counts.received,
+        recentHearts: recentHearts.map(h => ({ id: h.id, senderId: h.senderId, createdAt: h.createdAt.toISOString() })),
+      };
+    }),
   }),
 
-  // ========== JOB POSTINGS ==========
-  jobs: router({
-    getApproved: publicProcedure
-      .query(async () => {
-        try {
-          return await getApprovedJobs();
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch jobs" });
-        }
-      }),
-
-    getPending: publicProcedure
-      .query(async () => {
-        try {
-          return await getPendingJobs();
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch pending jobs" });
-        }
-      }),
-
-    getFeatured: publicProcedure
-      .query(async () => {
-        try {
-          return await getFeaturedJobs();
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch featured jobs" });
-        }
-      }),
-
-    getByAgency: publicProcedure
-      .input(z.object({ agencyId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          return await getJobPostingsByAgencyId(input.agencyId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch jobs" });
-        }
-      }),
-
-    getById: publicProcedure
-      .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          return await getJobPostingById(input.id);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch job" });
-        }
-      }),
-
-    create: publicProcedure
-      .input(z.object({
-        agencyId: z.number(),
-        title: z.string().min(5),
-        description: z.string().min(10),
-        location: z.string().min(3),
-        salary: z.string().optional(),
-        jobType: z.string().min(3),
-        requirements: z.string().optional(),
-        deadline: z.date().optional().nullable(),
-        documentRequirements: z.array(z.object({
-          title: z.string().min(1),
-          description: z.string().optional(),
-          isRequired: z.boolean(),
-          sortOrder: z.number(),
-        })).optional(),
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          const result = await createJobPosting({
-            agencyId: input.agencyId,
-            title: input.title,
-            description: input.description,
-            location: input.location,
-            salary: input.salary,
-            jobType: input.jobType,
-            requirements: input.requirements,
-            deadline: input.deadline || undefined,
-            status: "pending_approval"
-          });
-
-          const jobId = (result as any)[0]?.insertId || (result as any).insertId;
-
-          // Save document requirements if provided
-          if (input.documentRequirements && input.documentRequirements.length > 0 && jobId) {
-            await createDocumentRequirements(jobId, input.documentRequirements);
-          }
-
-          return { success: true, jobId };
-        } catch (error) {
-          console.error("Failed to create job:", error);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create job" });
-        }
-      }),
-
-    approve: publicProcedure
-      .input(z.object({
-        jobId: z.number(),
-        adminId: z.number()
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          await updateJobPostingStatus(input.jobId, "approved", input.adminId);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to approve job" });
-        }
-      }),
-
-    reject: publicProcedure
-      .input(z.object({
-        jobId: z.number()
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          await updateJobPostingStatus(input.jobId, "rejected");
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to reject job" });
-        }
-      }),
-        toggleFeatured: publicProcedure
-      .input(z.object({
-        jobId: z.number(),
-        isFeatured: z.boolean()
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          await toggleJobFeatured(input.jobId, input.isFeatured);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to toggle featured status" });
-        }
-      }),
-    delete: protectedProcedure
-      .input(z.object({
-        jobId: z.number()
-      }))
+  messages: router({
+    send: publicProcedure
+      .input(z.object({ content: z.string().min(1).max(200) }))
       .mutation(async ({ ctx, input }) => {
-        try {
-          const job = await getJobPostingById(input.jobId);
-          if (!job) {
-            throw new TRPCError({ code: "NOT_FOUND", message: "Job posting not found" });
-          }
-          
-          // Allow if user is admin OR if user is agency admin and owns the job
-          const isAdmin = ctx.user.type === "admin";
-          const isAgencyOwner = ctx.user.type === "agency" && job.agencyId === (ctx.user.agencyId || ctx.user.id);
-          
-          if (!isAdmin && !isAgencyOwner) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to delete this job posting" });
-          }
-          
-          await deleteJobPosting(input.jobId);
-          return { success: true };
-        } catch (error) {
-          if (error instanceof TRPCError) throw error;
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete job posting" });
-        }
+        const user = await getAppUserFromCtx(ctx);
+        if (!user.coupleId) throw new TRPCError({ code: "BAD_REQUEST", message: "Pair with someone first" });
+        const couple = await db.getCoupleById(user.coupleId);
+        if (!couple) throw new TRPCError({ code: "NOT_FOUND", message: "Couple not found" });
+        const receiverId = couple.user1Id === user.id ? couple.user2Id : couple.user1Id;
+        const messageId = await db.sendMessage({ senderId: user.id, receiverId, coupleId: user.coupleId, content: input.content });
+        return { messageId };
       }),
 
-    getAgencies: publicProcedure
-      .query(async () => {
-        try {
-          return await getAllAgencies();
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch agencies" });
-        }
+    list: publicProcedure.query(async ({ ctx }) => {
+      const user = await getAppUserFromCtx(ctx);
+      if (!user.coupleId) return [];
+      const msgs = await db.getMessagesByCoupleId(user.coupleId, 50);
+      return msgs.map(m => ({
+        id: m.id, senderId: m.senderId, content: m.content,
+        isWidgetMessage: m.isWidgetMessage, createdAt: m.createdAt.toISOString(),
+      }));
+    }),
+
+    setWidget: publicProcedure
+      .input(z.object({ messageId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await getAppUserFromCtx(ctx);
+        if (!user.coupleId) throw new TRPCError({ code: "BAD_REQUEST", message: "Not paired" });
+        await db.setWidgetMessage(input.messageId, user.coupleId);
+        return { success: true };
       }),
+
+    getWidgetMessage: publicProcedure.query(async ({ ctx }) => {
+      const user = await getAppUserFromCtx(ctx);
+      if (!user.coupleId) return null;
+      const msg = await db.getWidgetMessage(user.coupleId);
+      if (!msg) return null;
+      const sender = await db.getAppUserById(msg.senderId);
+      return { id: msg.id, content: msg.content, senderName: sender?.displayName ?? "Your Love", createdAt: msg.createdAt.toISOString() };
+    }),
   }),
 
-  // ========== JOB APPLICATIONS ==========
-
-
-  // ========== NOTIFICATIONS ==========
-  notifications: router({
-    get: publicProcedure
-      .input(z.object({
-        recipientType: z.enum(["admin", "agency", "candidate"]),
-        recipientId: z.number()
-      }))
+  widget: router({
+    getData: publicProcedure
+      .input(z.object({ userId: z.number() }))
       .query(async ({ input }) => {
-        try {
-          return await getNotifications(input.recipientType, input.recipientId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch notifications" });
-        }
-      }),
-
-    create: publicProcedure
-      .input(z.object({
-        recipientType: z.enum(["admin", "agency", "candidate"]),
-        recipientId: z.number(),
-        title: z.string(),
-        message: z.string(),
-        type: z.string()
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          const result = await createNotification({
-            recipientType: input.recipientType,
-            recipientId: input.recipientId,
-            title: input.title,
-            message: input.message,
-            type: input.type,
-            isRead: false
-          });
-
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create notification" });
-        }
-      }),
-  }),
-
-  // ========== JOB VIEWS ==========
-  jobViews: router({
-    track: publicProcedure
-      .input(z.object({
-        jobId: z.number(),
-        candidateId: z.number().optional()
-      }))
-      .mutation(async ({ input }) => {
-        try {
-          await createJobView({
-            jobId: input.jobId,
-            candidateId: input.candidateId
-          });
-
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to track view" });
-        }
-      }),
-
-    getCount: publicProcedure
-      .input(z.object({ jobId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          const count = await getJobViewCount(input.jobId);
-          return { count };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to get view count" });
-        }
-      }),
-  }),
-
-  // ========== CANDIDATE PROFILES ==========
-  profiles: router({
-    getMyProfile: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          const profile = await getCandidateProfile(ctx.user.id);
-          return profile || null;
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch profile" });
-        }
-      }),
-
-    updateProfile: protectedProcedure
-      .input(z.object({
-        bio: z.string().optional(),
-        phone: z.string().optional(),
-        location: z.string().optional(),
-        yearsOfExperience: z.number().optional(),
-        skills: z.string().optional(),
-        certifications: z.string().optional()
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await upsertCandidateProfile({
-            candidateId: ctx.user.id,
-            ...input
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update profile" });
-        }
-      }),
-
-    updateProfilePicture: protectedProcedure
-      .input(z.object({ pictureUrl: z.string().url() }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await updateCandidateProfilePicture(ctx.user.id, input.pictureUrl);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update picture" });
-        }
-      }),
-
-    updateResume: protectedProcedure
-      .input(z.object({ resumeUrl: z.string().url() }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await updateCandidateResume(ctx.user.id, input.resumeUrl);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update resume" });
-        }
-      }),
-
-    // Job Experience
-    getExperience: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          return await getJobExperience(ctx.user.id);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch experience" });
-        }
-      }),
-
-    addExperience: protectedProcedure
-      .input(z.object({
-        jobTitle: z.string(),
-        department: z.string(),
-        location: z.string().optional(),
-        startDate: z.string(),
-        endDate: z.string().optional(),
-        isCurrentPosition: z.boolean().default(false),
-        description: z.string().optional()
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const { startDate, endDate, ...rest } = input;
-          await addJobExperience({
-            candidateId: ctx.user.id,
-            ...rest,
-            startDate: new Date(startDate),
-            endDate: endDate ? new Date(endDate) : undefined,
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to add experience" });
-        }
-      }),
-
-    updateExperience: publicProcedure
-      .input(z.object({
-        experienceId: z.number(),
-        jobTitle: z.string().optional(),
-        department: z.string().optional(),
-        location: z.string().optional(),
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        isCurrentPosition: z.boolean().optional(),
-        description: z.string().optional()
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const { experienceId, ...data } = input;
-          await updateJobExperience(experienceId, {
-            ...data,
-            startDate: data.startDate ? new Date(data.startDate) : undefined,
-            endDate: data.endDate ? new Date(data.endDate) : undefined,
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update experience" });
-        }
-      }),
-
-    deleteExperience: publicProcedure
-      .input(z.object({ experienceId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await deleteJobExperience(input.experienceId);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete experience" });
-        }
-      }),
-
-    // Certifications
-    getCertifications: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          return await getCandidateCertifications(ctx.user.id);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch certifications" });
-        }
-      }),
-
-    addCertification: protectedProcedure
-      .input(z.object({
-        certificationName: z.string(),
-        issuingOrganization: z.string(),
-        issueDate: z.string(),
-        expirationDate: z.string().optional(),
-        certificateUrl: z.string().url().optional()
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const { issueDate, expirationDate, ...rest } = input;
-          await addCertification({
-            candidateId: ctx.user.id,
-            ...rest,
-            issueDate: new Date(issueDate),
-            expirationDate: expirationDate ? new Date(expirationDate) : undefined,
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to add certification" });
-        }
-      }),
-
-    updateCertification: protectedProcedure
-      .input(z.object({
-        certificationId: z.number(),
-        certificationName: z.string().optional(),
-        issuingOrganization: z.string().optional(),
-        issueDate: z.string().optional(),
-        expirationDate: z.string().optional(),
-        certificateUrl: z.string().url().optional()
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const { certificationId, ...data } = input;
-          await updateCertification(certificationId, {
-            ...data,
-            issueDate: data.issueDate ? new Date(data.issueDate) : undefined,
-            expirationDate: data.expirationDate ? new Date(data.expirationDate) : undefined,
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update certification" });
-        }
-      }),
-
-    deleteCertification: protectedProcedure
-      .input(z.object({ certificationId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await deleteCertification(input.certificationId);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to delete certification" });
-        }
-      }),
-
-    // Admin view
-    getAllCandidates: publicProcedure
-      .query(async ({ ctx }) => {
-        try {
-          return await getAllCandidateProfiles();
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch candidates" });
-        }
-      }),
-
-    getCandidateProfileById: publicProcedure
-      .input(z.object({ candidateId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          const profile = await getCandidateProfile(input.candidateId);
-          if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Profile not found" });
-          const experience = await getJobExperience(input.candidateId);
-          const certifications = await getCandidateCertifications(input.candidateId);
-          return { ...profile, experience, certifications };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch profile" });
-        }
-      }),
-  }),
-
-  // ========== MESSAGING ==========
-  messaging: router({
-    getOrCreateConversation: protectedProcedure
-      .input(z.object({
-        agencyId: z.number(),
-        jobPostingId: z.number().optional()
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          // ctx.user.id is the candidateId for candidate users
-          const convo = await getOrCreateConversation(ctx.user.id, input.agencyId, input.jobPostingId);
-          return convo;
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create conversation" });
-        }
-      }),
-
-    getCandidateConversations: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          return await getCandidateConversations(ctx.user.id);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch conversations" });
-        }
-      }),
-
-    getAgencyConversations: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          // For agency users, ctx.user.id is the agencyAdmin id, but conversations
-          // are stored with the agencyId. Use ctx.user.agencyId instead.
-          const agencyId = ctx.user.agencyId || ctx.user.id;
-          return await getAgencyConversations(agencyId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch conversations" });
-        }
-      }),
-
-    getMessages: protectedProcedure
-      .input(z.object({ conversationId: z.number() }))
-      .query(async ({ ctx, input }) => {
-        try {
-          // For marking messages as read, we need to use the correct ID
-          // For agency users, messages are sent by candidateId, so we mark
-          // messages not sent by the agency user as read
-          const userId = ctx.user.type === "agency" ? (ctx.user.agencyId || ctx.user.id) : ctx.user.id;
-          await markMessagesAsRead(input.conversationId, userId);
-          return await getConversationMessages(input.conversationId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch messages" });
-        }
-      }),
-
-    sendMessage: protectedProcedure
-      .input(z.object({
-        conversationId: z.number(),
-        content: z.string().min(1)
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const convo = await getConversationById(input.conversationId);
-          if (!convo) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
-          
-          // Determine sender type based on user type from JWT, not by comparing IDs
-          const senderType = ctx.user.type === "candidate" ? "candidate" : "agency";
-          // Use the appropriate ID as senderId
-          const senderId = ctx.user.type === "agency" ? (ctx.user.agencyId || ctx.user.id) : ctx.user.id;
-          const message = await sendMessage(input.conversationId, senderId, senderType, input.content);
-          return message;
-        } catch (error) {
-          console.error("Failed to send message:", error);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to send message" });
-        }
-      }),
-
-    getUnreadCount: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          // Detect user type and use the correct ID
-          const userType = ctx.user.type === "candidate" ? "candidate" : "agency";
-          const userId = ctx.user.type === "agency" ? (ctx.user.agencyId || ctx.user.id) : ctx.user.id;
-          const totalUnread = await getTotalUnreadMessages(userId, userType as "candidate" | "agency");
-          return { unreadCount: totalUnread };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to get unread count" });
-        }
-      }),
-  }),
-
-  // ========== APPLICATIONS ==========
-  applications: router({
-    uploadForm: publicProcedure
-      .input(z.object({
-        jobId: z.number(),
-        formUrl: z.string().url(),
-        formFileName: z.string(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await uploadApplicationForm({
-            jobId: input.jobId,
-            formUrl: input.formUrl,
-            formFileName: input.formFileName,
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to upload form" });
-        }
-      }),
-
-    getForm: publicProcedure
-      .input(z.object({ jobId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          return await getApplicationFormByJobId(input.jobId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch form" });
-        }
-      }),
-
-    submit: protectedProcedure
-      .input(z.object({
-        jobId: z.number(),
-        submissionUrl: z.string().optional().default(""),
-        submissionFileName: z.string().optional().default(""),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await submitApplication({
-            jobId: input.jobId,
-            candidateId: ctx.user.id,
-            submissionUrl: input.submissionUrl,
-            submissionFileName: input.submissionFileName,
-            status: "applied",
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to submit application" });
-        }
-      }),
-
-    getByJob: publicProcedure
-      .input(z.object({ jobId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          return await getApplicationSubmissionsByJobId(input.jobId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch applications" });
-        }
-      }),
-
-    getByCandidate: protectedProcedure
-      .query(async ({ ctx }) => {
-        try {
-          return await getApplicationSubmissionsByCandidateId(ctx.user.id);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch applications" });
-        }
-      }),
-
-    updateStatus: publicProcedure
-      .input(z.object({
-        submissionId: z.number(),
-        status: z.enum(["applied", "reviewing", "shortlisted", "rejected", "offered", "accepted"]),
-        notes: z.string().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await updateApplicationStatus(input.submissionId, input.status, input.notes);
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to update status" });
-        }
-      }),
-
-    // Document requirements per job
-    getDocumentRequirements: publicProcedure
-      .input(z.object({ jobId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          return await getDocumentRequirements(input.jobId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch document requirements" });
-        }
-      }),
-
-    // Upload a document for a specific requirement
-    uploadDocument: protectedProcedure
-      .input(z.object({
-        jobId: z.number(),
-        requirementId: z.number(),
-        fileUrl: z.string(),
-        fileName: z.string(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          await createCandidateDocUpload({
-            jobId: input.jobId,
-            candidateId: ctx.user.id,
-            requirementId: input.requirementId,
-            fileUrl: input.fileUrl,
-            fileName: input.fileName,
-          });
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to upload document" });
-        }
-      }),
-
-    // Get candidate's uploaded documents for a job
-    getCandidateDocuments: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
-      .query(async ({ ctx, input }) => {
-        try {
-          return await getCandidateDocUploads(input.jobId, ctx.user.id);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch documents" });
-        }
-      }),
-
-    // Agency: view candidate's uploaded documents for a job
-    getApplicantDocuments: publicProcedure
-      .input(z.object({ jobId: z.number(), candidateId: z.number() }))
-      .query(async ({ input }) => {
-        try {
-          return await getCandidateDocUploads(input.jobId, input.candidateId);
-        } catch (error) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to fetch applicant documents" });
-        }
+        const user = await db.getAppUserById(input.userId);
+        if (!user || !user.coupleId) return null;
+        const msg = await db.getLatestMessageForUser(input.userId);
+        const couple = await db.getCoupleById(user.coupleId);
+        if (!couple) return null;
+        const partnerId = couple.user1Id === user.id ? couple.user2Id : couple.user1Id;
+        const partner = await db.getAppUserById(partnerId);
+        return {
+          message: msg?.content ?? "No messages yet",
+          partnerName: partner?.displayName ?? "Your Love",
+          timestamp: msg?.createdAt.toISOString() ?? new Date().toISOString(),
+        };
       }),
   }),
 });

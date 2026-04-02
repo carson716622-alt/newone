@@ -1,1 +1,0 @@
-ALTER TABLE `jobPostings` ADD `isFeatured` boolean DEFAULT false NOT NULL;

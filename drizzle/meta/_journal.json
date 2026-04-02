@@ -5,71 +5,15 @@
     {
       "idx": 0,
       "version": "5",
-      "when": 1774433721139,
-      "tag": "0000_striped_gambit",
+      "when": 1763372440610,
+      "tag": "0000_elite_eternals",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "5",
-      "when": 1774433912223,
-      "tag": "0001_previous_naoko",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1774434933257,
-      "tag": "0002_slim_the_order",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1774435143090,
-      "tag": "0003_aromatic_ghost_rider",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1774435275109,
-      "tag": "0004_late_spyke",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1774435821556,
-      "tag": "0005_lowly_silver_fox",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "5",
-      "when": 1774436687034,
-      "tag": "0006_serious_drax",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "5",
-      "when": 1774437115373,
-      "tag": "0007_smart_taskmaster",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "5",
-      "when": 1774437538508,
-      "tag": "0008_flippant_darkstar",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "5",
-      "when": 1774439859487,
-      "tag": "0009_quiet_mephisto",
+      "when": 1775101346238,
+      "tag": "0001_mute_secret_warriors",
       "breakpoints": true
     }
   ]
