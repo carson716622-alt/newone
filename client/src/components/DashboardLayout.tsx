@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -21,21 +22,43 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  PanelLeft,
+  Radio,
+  Shield,
+  Flame,
+  Users,
+  Car,
+  AlertTriangle,
+  FileText,
+  Settings,
+  Bell,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { trpc } from "@/lib/trpc";
+import { Badge } from "./ui/badge";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", dept: "all" },
+  { icon: Radio, label: "Dispatch", path: "/dispatch", dept: "dispatch" },
+  { icon: Shield, label: "LEO Panel", path: "/leo", dept: "leo" },
+  { icon: Flame, label: "Fire/EMS", path: "/fire-ems", dept: "fire_ems" },
+  { icon: Users, label: "Unit Status", path: "/units", dept: "all" },
+  { icon: Car, label: "Citizens & Vehicles", path: "/citizens", dept: "all" },
+  { icon: AlertTriangle, label: "Warrants & BOLOs", path: "/warrants", dept: "all" },
+  { icon: FileText, label: "Reports", path: "/reports", dept: "all" },
+  { icon: Settings, label: "Admin", path: "/admin", dept: "admin" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
-const DEFAULT_WIDTH = 280;
+const DEFAULT_WIDTH = 260;
 const MIN_WIDTH = 200;
-const MAX_WIDTH = 480;
+const MAX_WIDTH = 400;
 
 export default function DashboardLayout({
   children,
@@ -53,19 +76,22 @@ export default function DashboardLayout({
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex flex-col items-center gap-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Sign in to continue
-            </h1>
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-3">
+              <Shield className="h-10 w-10 text-blue-500" />
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                FiveM CAD
+              </h1>
+            </div>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Access to this dashboard requires authentication. Continue to launch the login flow.
+              Computer-Aided Dispatch & Records Management System. Sign in to access your department panel.
             </p>
           </div>
           <Button
@@ -73,9 +99,9 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all"
           >
-            Sign in
+            Sign In to CAD
           </Button>
         </div>
       </div>
@@ -112,8 +138,11 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const activeMenuItem = menuItems.find((item) => item.path === location);
   const isMobile = useIsMobile();
+  const { data: unreadCount } = trpc.notifications.unreadCount.useQuery(undefined, {
+    refetchInterval: 15000,
+  });
 
   useEffect(() => {
     if (isCollapsed) {
@@ -124,8 +153,8 @@ function DashboardLayoutContent({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-
-      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left ?? 0;
+      const sidebarLeft =
+        sidebarRef.current?.getBoundingClientRect().left ?? 0;
       const newWidth = e.clientX - sidebarLeft;
       if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
         setSidebarWidth(newWidth);
@@ -151,15 +180,22 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
+  const userDept = (user as any)?.department || "leo";
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (item.dept === "all") return true;
+    if ((user as any)?.role === "admin") return true;
+    return item.dept === userDept;
+  });
+
   return (
     <>
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r border-border/50"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          <SidebarHeader className="h-16 justify-center border-b border-border/50">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
@@ -170,18 +206,29 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                  <Shield className="h-5 w-5 text-blue-500 shrink-0" />
+                  <span className="font-bold tracking-tight truncate text-foreground">
+                    FiveM CAD
                   </span>
                 </div>
               ) : null}
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
+          <SidebarContent className="gap-0 py-2">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {filteredMenuItems.map((item) => {
                 const isActive = location === item.path;
+                const iconColor =
+                  item.dept === "leo"
+                    ? "text-blue-400"
+                    : item.dept === "fire_ems"
+                    ? "text-red-400"
+                    : item.dept === "dispatch"
+                    ? "text-amber-400"
+                    : item.dept === "admin"
+                    ? "text-purple-400"
+                    : "";
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -191,7 +238,9 @@ function DashboardLayoutContent({
                       className={`h-10 transition-all font-normal`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        className={`h-4 w-4 ${
+                          isActive ? iconColor || "text-primary" : "text-muted-foreground"
+                        }`}
                       />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
@@ -201,26 +250,34 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
+          <SidebarFooter className="p-3 border-t border-border/50">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium">
-                      {user?.name?.charAt(0).toUpperCase()}
+                  <Avatar className="h-9 w-9 border border-border shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-blue-600 text-white">
+                      {user?.name?.charAt(0).toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
+                    <p className="text-sm font-medium truncate leading-none text-foreground">
+                      {user?.name || "Officer"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
+                    <p className="text-xs text-muted-foreground truncate mt-1">
+                      {(user as any)?.callsign || (user as any)?.badgeNumber || "No Callsign"}
                     </p>
                   </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setLocation("/dashboard")}
+                  className="cursor-pointer"
+                >
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  <span>Dashboard</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -233,7 +290,9 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${
+            isCollapsed ? "hidden" : ""
+          }`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);
@@ -248,16 +307,25 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
+                <span className="tracking-tight text-foreground font-medium">
+                  {activeMenuItem?.label ?? "CAD"}
+                </span>
               </div>
             </div>
+            <button
+              onClick={() => setLocation("/dashboard")}
+              className="relative p-2 hover:bg-accent rounded-lg"
+            >
+              <Bell className="h-5 w-5 text-muted-foreground" />
+              {unreadCount && unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
   );
