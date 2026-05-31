@@ -1,18 +1,43 @@
-# Project TODO
+# Police Scheduling System TODO
 
-- [x] Dark theme setup (navy/charcoal background, department color accents)
-- [x] Database schema (users with roles, civilians, vehicles, calls, units, warrants, BOLOs, reports, notifications)
-- [x] Role-based access control (LEO, Fire/EMS, Dispatch, Admin)
-- [x] Dashboard home screen (active calls summary, unit status overview, recent incidents, quick actions)
-- [x] Dispatch panel (create calls with Code 1-4 priority, assign units, active calls board, call notes/dispositions)
-- [x] LEO panel (person/name lookup, vehicle/plate lookup, warrants, BOLOs, arrest reports, citations)
-- [x] Fire/EMS panel (active medical/fire calls, unit status tracking, incident/patient care reports)
-- [x] Unit Status Board (all departments, color-coded badges: Available, Busy, En Route, On Scene, Off Duty)
-- [x] Citizens & Vehicles database (civilian profiles, vehicle registrations, license records)
-- [x] Warrants & BOLO management (create, view, clear warrants and BOLOs with suspect details)
-- [x] Incident reports (LEO arrest/citation reports, Fire/EMS patient care reports, auto case numbers)
-- [x] Notifications (in-app for new calls, new BOLO/warrant issuances)
-- [x] Monospace font for data fields (tactical/terminal aesthetic)
-- [x] Department color coding (blue=LEO, red=Fire/EMS, amber=Dispatch)
-- [x] DashboardLayout with sidebar navigation
-- [x] Vitest tests (auth, protected routes, admin routes, input validation, shared types, case number generation)
+## Backend
+- [x] Database schema: users, officers, shifts, shift_assignments, pto_requests, shift_swap_requests, overtime_records
+- [x] Drizzle relations
+- [x] Officer CRUD API routes (list, create, update, delete)
+- [x] Shift CRUD API routes (list, create, update, delete)
+- [x] Shift assignment API routes (assign, unassign, list by shift)
+- [x] PTO request API routes (create, list, approve, deny)
+- [x] Shift swap request API routes (create, accept, deny)
+- [x] Overtime records API routes (list, summary by officer/week)
+- [x] Dashboard stats API (shift coverage, shortage alerts, pending PTO count)
+
+## Web Admin Frontend
+- [x] App routing setup (Dashboard, Officers, Shifts, PTO, Swaps, Overtime)
+- [x] Updated DashboardLayout with police scheduling nav items
+- [x] Dashboard overview page (stats cards, shortage alerts, upcoming shifts)
+- [x] Officers roster page (table, add/edit/delete officer modal)
+- [x] Shifts management page (list view, create/edit shift modal)
+- [x] Shift assignment panel (assign officers to shift, view assigned officers)
+- [x] PTO management page (pending requests, approve/deny, history)
+- [x] Shift swap requests page (view, approve/deny)
+- [x] Overtime tracking page (officer hours summary, weekly breakdown)
+
+## Mobile App (React Native / Expo)
+- [ ] Initialize Expo mobile app in /home/ubuntu/police-scheduling-mobile
+- [ ] Login screen with API auth
+- [ ] Officer schedule view (calendar + list)
+- [ ] Shift detail screen
+- [ ] PTO request submission screen
+- [ ] PTO request history screen
+- [ ] Shift swap request screen
+- [ ] Push notification setup
+
+## Testing
+- [x] Officer router unit tests
+- [x] Shift router unit tests
+- [x] PTO router unit tests
+- [x] Auth integration tests
+
+## GitHub
+- [ ] Push web app to GitHub repo
+- [ ] Push mobile app to GitHub repo

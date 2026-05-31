@@ -1,8 +1,17 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  date,
+  decimal,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  time,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- */
+// ─── Users (Auth) ────────────────────────────────────────────────────────────
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
@@ -10,193 +19,163 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  department: mysqlEnum("department", ["leo", "fire_ems", "dispatch", "admin"]).default("leo").notNull(),
-  badgeNumber: varchar("badgeNumber", { length: 20 }),
-  callsign: varchar("callsign", { length: 20 }),
-  unitStatus: mysqlEnum("unitStatus", ["available", "busy", "en_route", "on_scene", "off_duty"]).default("off_duty").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
-
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-/**
- * Civilians database
- */
-export const civilians = mysqlTable("civilians", {
+// ─── Officers ─────────────────────────────────────────────────────────────────
+export const officers = mysqlTable("officers", {
   id: int("id").autoincrement().primaryKey(),
-  firstName: varchar("firstName", { length: 100 }).notNull(),
-  lastName: varchar("lastName", { length: 100 }).notNull(),
-  dateOfBirth: varchar("dateOfBirth", { length: 20 }).notNull(),
-  gender: mysqlEnum("gender", ["male", "female", "other"]).notNull(),
-  race: varchar("race", { length: 50 }),
-  address: text("address"),
-  phone: varchar("phone", { length: 20 }),
-  licenseNumber: varchar("licenseNumber", { length: 30 }),
-  licenseStatus: mysqlEnum("licenseStatus", ["valid", "suspended", "revoked", "expired"]).default("valid"),
-  flags: text("flags"),
-  createdById: int("createdById").notNull(),
+  userId: int("userId").references(() => users.id, { onDelete: "set null" }),
+  badgeNumber: varchar("badgeNumber", { length: 32 }).notNull().unique(),
+  firstName: varchar("firstName", { length: 128 }).notNull(),
+  lastName: varchar("lastName", { length: 128 }).notNull(),
+  rank: mysqlEnum("rank", [
+    "officer",
+    "detective",
+    "corporal",
+    "sergeant",
+    "lieutenant",
+    "captain",
+    "commander",
+    "deputy_chief",
+    "chief",
+  ])
+    .default("officer")
+    .notNull(),
+  unit: varchar("unit", { length: 128 }),
+  phone: varchar("phone", { length: 32 }),
+  email: varchar("email", { length: 320 }),
+  hireDate: date("hireDate"),
+  status: mysqlEnum("status", ["active", "inactive", "on_leave"])
+    .default("active")
+    .notNull(),
+  maxWeeklyHours: int("maxWeeklyHours").default(40).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+export type Officer = typeof officers.$inferSelect;
+export type InsertOfficer = typeof officers.$inferInsert;
 
-export type Civilian = typeof civilians.$inferSelect;
-export type InsertCivilian = typeof civilians.$inferInsert;
-
-/**
- * Vehicles database
- */
-export const vehicles = mysqlTable("vehicles", {
+// ─── Shifts ───────────────────────────────────────────────────────────────────
+export const shifts = mysqlTable("shifts", {
   id: int("id").autoincrement().primaryKey(),
-  plate: varchar("plate", { length: 20 }).notNull(),
-  make: varchar("make", { length: 50 }).notNull(),
-  model: varchar("model", { length: 50 }).notNull(),
-  year: int("year"),
-  color: varchar("color", { length: 30 }).notNull(),
-  vin: varchar("vin", { length: 30 }),
-  registrationStatus: mysqlEnum("registrationStatus", ["valid", "expired", "stolen", "suspended"]).default("valid"),
-  insuranceStatus: mysqlEnum("insuranceStatus", ["valid", "expired", "none"]).default("valid"),
-  ownerId: int("ownerId"),
-  flags: text("flags"),
-  createdById: int("createdById").notNull(),
+  name: varchar("name", { length: 128 }).notNull(),
+  date: date("date").notNull(),
+  startTime: time("startTime").notNull(),
+  endTime: time("endTime").notNull(),
+  unit: varchar("unit", { length: 128 }),
+  location: varchar("location", { length: 256 }),
+  minimumOfficers: int("minimumOfficers").default(1).notNull(),
+  notes: text("notes"),
+  status: mysqlEnum("status", ["open", "filled", "shortage", "cancelled"])
+    .default("open")
+    .notNull(),
+  createdBy: int("createdBy").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+export type Shift = typeof shifts.$inferSelect;
+export type InsertShift = typeof shifts.$inferInsert;
 
-export type Vehicle = typeof vehicles.$inferSelect;
-export type InsertVehicle = typeof vehicles.$inferInsert;
-
-/**
- * Calls for service
- */
-export const calls = mysqlTable("calls", {
+// ─── Shift Assignments ────────────────────────────────────────────────────────
+export const shiftAssignments = mysqlTable("shift_assignments", {
   id: int("id").autoincrement().primaryKey(),
-  caseNumber: varchar("caseNumber", { length: 30 }).notNull().unique(),
-  nature: varchar("nature", { length: 200 }).notNull(),
-  priority: mysqlEnum("priority", ["code_1", "code_2", "code_3", "code_4"]).notNull(),
-  status: mysqlEnum("status", ["pending", "dispatched", "en_route", "on_scene", "closed"]).default("pending").notNull(),
-  location: text("location").notNull(),
-  description: text("description"),
-  callerName: varchar("callerName", { length: 100 }),
-  callerPhone: varchar("callerPhone", { length: 20 }),
-  disposition: text("disposition"),
-  department: mysqlEnum("department", ["leo", "fire_ems", "both"]).default("leo").notNull(),
-  createdById: int("createdById").notNull(),
-  closedAt: timestamp("closedAt"),
+  shiftId: int("shiftId")
+    .notNull()
+    .references(() => shifts.id, { onDelete: "cascade" }),
+  officerId: int("officerId")
+    .notNull()
+    .references(() => officers.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 128 }),
+  isOvertime: boolean("isOvertime").default(false).notNull(),
+  confirmedAt: timestamp("confirmedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+export type ShiftAssignment = typeof shiftAssignments.$inferSelect;
+export type InsertShiftAssignment = typeof shiftAssignments.$inferInsert;
 
-export type Call = typeof calls.$inferSelect;
-export type InsertCall = typeof calls.$inferInsert;
-
-/**
- * Call notes
- */
-export const callNotes = mysqlTable("call_notes", {
+// ─── PTO Requests ─────────────────────────────────────────────────────────────
+export const ptoRequests = mysqlTable("pto_requests", {
   id: int("id").autoincrement().primaryKey(),
-  callId: int("callId").notNull(),
-  content: text("content").notNull(),
-  authorId: int("authorId").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type CallNote = typeof callNotes.$inferSelect;
-export type InsertCallNote = typeof callNotes.$inferInsert;
-
-/**
- * Unit assignments to calls
- */
-export const callUnits = mysqlTable("call_units", {
-  id: int("id").autoincrement().primaryKey(),
-  callId: int("callId").notNull(),
-  unitId: int("unitId").notNull(),
-  assignedAt: timestamp("assignedAt").defaultNow().notNull(),
-  clearedAt: timestamp("clearedAt"),
-});
-
-export type CallUnit = typeof callUnits.$inferSelect;
-export type InsertCallUnit = typeof callUnits.$inferInsert;
-
-/**
- * Warrants
- */
-export const warrants = mysqlTable("warrants", {
-  id: int("id").autoincrement().primaryKey(),
-  civilianId: int("civilianId"),
-  suspectName: varchar("suspectName", { length: 200 }).notNull(),
-  charges: text("charges").notNull(),
-  description: text("description"),
-  status: mysqlEnum("status", ["active", "served", "recalled"]).default("active").notNull(),
-  issuedById: int("issuedById").notNull(),
-  servedById: int("servedById"),
-  servedAt: timestamp("servedAt"),
+  officerId: int("officerId")
+    .notNull()
+    .references(() => officers.id, { onDelete: "cascade" }),
+  startDate: date("startDate").notNull(),
+  endDate: date("endDate").notNull(),
+  type: mysqlEnum("type", ["vacation", "sick", "personal", "bereavement", "other"])
+    .default("vacation")
+    .notNull(),
+  reason: text("reason"),
+  status: mysqlEnum("status", ["pending", "approved", "denied"])
+    .default("pending")
+    .notNull(),
+  reviewedBy: int("reviewedBy").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+export type PtoRequest = typeof ptoRequests.$inferSelect;
+export type InsertPtoRequest = typeof ptoRequests.$inferInsert;
 
-export type Warrant = typeof warrants.$inferSelect;
-export type InsertWarrant = typeof warrants.$inferInsert;
-
-/**
- * BOLOs (Be On the Lookout)
- */
-export const bolos = mysqlTable("bolos", {
+// ─── Shift Swap Requests ──────────────────────────────────────────────────────
+export const shiftSwapRequests = mysqlTable("shift_swap_requests", {
   id: int("id").autoincrement().primaryKey(),
-  title: varchar("title", { length: 200 }).notNull(),
-  description: text("description").notNull(),
-  suspectName: varchar("suspectName", { length: 200 }),
-  suspectDescription: text("suspectDescription"),
-  vehicleDescription: text("vehicleDescription"),
-  lastSeenLocation: text("lastSeenLocation"),
-  status: mysqlEnum("status", ["active", "cleared"]).default("active").notNull(),
-  issuedById: int("issuedById").notNull(),
-  clearedById: int("clearedById"),
-  clearedAt: timestamp("clearedAt"),
+  requestingOfficerId: int("requestingOfficerId")
+    .notNull()
+    .references(() => officers.id, { onDelete: "cascade" }),
+  targetOfficerId: int("targetOfficerId").references(() => officers.id, {
+    onDelete: "set null",
+  }),
+  originalShiftId: int("originalShiftId")
+    .notNull()
+    .references(() => shifts.id, { onDelete: "cascade" }),
+  targetShiftId: int("targetShiftId").references(() => shifts.id, {
+    onDelete: "set null",
+  }),
+  reason: text("reason"),
+  status: mysqlEnum("status", ["pending", "accepted", "denied", "cancelled"])
+    .default("pending")
+    .notNull(),
+  reviewedBy: int("reviewedBy").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  reviewedAt: timestamp("reviewedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+export type ShiftSwapRequest = typeof shiftSwapRequests.$inferSelect;
+export type InsertShiftSwapRequest = typeof shiftSwapRequests.$inferInsert;
 
-export type Bolo = typeof bolos.$inferSelect;
-export type InsertBolo = typeof bolos.$inferInsert;
-
-/**
- * Incident reports (LEO arrests, citations, Fire/EMS patient care)
- */
-export const reports = mysqlTable("reports", {
+// ─── Overtime Records ─────────────────────────────────────────────────────────
+export const overtimeRecords = mysqlTable("overtime_records", {
   id: int("id").autoincrement().primaryKey(),
-  caseNumber: varchar("caseNumber", { length: 30 }).notNull().unique(),
-  type: mysqlEnum("type", ["arrest", "citation", "patient_care", "fire_incident"]).notNull(),
-  title: varchar("title", { length: 200 }).notNull(),
-  narrative: text("narrative").notNull(),
-  civilianId: int("civilianId"),
-  callId: int("callId"),
-  charges: text("charges"),
-  location: text("location"),
-  officerId: int("officerId").notNull(),
-  status: mysqlEnum("status", ["draft", "submitted", "approved"]).default("draft").notNull(),
+  officerId: int("officerId")
+    .notNull()
+    .references(() => officers.id, { onDelete: "cascade" }),
+  shiftAssignmentId: int("shiftAssignmentId").references(
+    () => shiftAssignments.id,
+    { onDelete: "set null" }
+  ),
+  weekStartDate: date("weekStartDate").notNull(),
+  regularHours: decimal("regularHours", { precision: 5, scale: 2 })
+    .default("0")
+    .notNull(),
+  overtimeHours: decimal("overtimeHours", { precision: 5, scale: 2 })
+    .default("0")
+    .notNull(),
+  notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
-export type Report = typeof reports.$inferSelect;
-export type InsertReport = typeof reports.$inferInsert;
-
-/**
- * In-app notifications
- */
-export const notifications = mysqlTable("notifications", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  title: varchar("title", { length: 200 }).notNull(),
-  message: text("message").notNull(),
-  type: mysqlEnum("type", ["call", "bolo", "warrant", "system"]).notNull(),
-  isRead: boolean("isRead").default(false).notNull(),
-  referenceId: int("referenceId"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type Notification = typeof notifications.$inferSelect;
-export type InsertNotification = typeof notifications.$inferInsert;
+export type OvertimeRecord = typeof overtimeRecords.$inferSelect;
+export type InsertOvertimeRecord = typeof overtimeRecords.$inferInsert;

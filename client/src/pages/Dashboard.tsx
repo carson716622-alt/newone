@@ -1,181 +1,221 @@
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Phone, Users, AlertTriangle, FileText, Radio, Shield, Flame, Clock } from "lucide-react";
-import { useLocation } from "wouter";
-import { CALL_PRIORITY_LABELS, CALL_STATUS_LABELS } from "@shared/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Users,
+  CalendarDays,
+  AlertTriangle,
+  Clock,
+  UmbrellaOff,
+  ShieldCheck,
+  TrendingUp,
+} from "lucide-react";
+import { format } from "date-fns";
 
-export default function Dashboard() {
-  const [, setLocation] = useLocation();
-  const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery();
-  const { data: activeCalls } = trpc.dashboard.activeCalls.useQuery(undefined, { refetchInterval: 10000 });
-  const { data: notifications } = trpc.notifications.list.useQuery();
-
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  color,
+  subtitle,
+}: {
+  title: string;
+  value: number | string;
+  icon: React.ElementType;
+  color: string;
+  subtitle?: string;
+}) {
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
+    <Card className="border-0 shadow-sm bg-white">
+      <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">System overview and active operations</p>
+            <p className="text-sm font-medium text-gray-500">{title}</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
+            {subtitle && (
+              <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
+            )}
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setLocation("/dispatch")}>
-              <Radio className="h-4 w-4 mr-1" /> New Call
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setLocation("/warrants")}>
-              <AlertTriangle className="h-4 w-4 mr-1" /> BOLO
-            </Button>
+          <div className={`p-3 rounded-xl ${color}`}>
+            <Icon className="h-6 w-6 text-white" />
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Active Calls</p>
-                  <p className="text-3xl font-bold text-foreground mt-1 data-field">{stats?.activeCalls ?? 0}</p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <Phone className="h-5 w-5 text-amber-500" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Available Units</p>
-                  <p className="text-3xl font-bold text-foreground mt-1 data-field">{stats?.availableUnits ?? 0}</p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-green-500" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Active Warrants</p>
-                  <p className="text-3xl font-bold text-foreground mt-1 data-field">{stats?.activeWarrants ?? 0}</p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-red-500" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Active BOLOs</p>
-                  <p className="text-3xl font-bold text-foreground mt-1 data-field">{stats?.activeBolos ?? 0}</p>
-                </div>
-                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-blue-500" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+export default function Dashboard() {
+  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-1">Department scheduling overview</p>
         </div>
-
-        {/* Active Calls & Notifications */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Active Calls */}
-          <div className="lg:col-span-2">
-            <Card className="bg-card border-border/50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Radio className="h-4 w-4 text-amber-500" />
-                  Active Calls for Service
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!activeCalls || activeCalls.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No active calls</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {activeCalls.slice(0, 8).map((call) => (
-                      <div
-                        key={call.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors cursor-pointer"
-                        onClick={() => setLocation("/dispatch")}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Badge className={`text-[10px] px-1.5 py-0.5 priority-${call.priority}`}>
-                            {CALL_PRIORITY_LABELS[call.priority as keyof typeof CALL_PRIORITY_LABELS] || call.priority}
-                          </Badge>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{call.nature}</p>
-                            <p className="text-xs text-muted-foreground truncate data-field">{call.location}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Badge variant="outline" className="text-[10px]">
-                            {CALL_STATUS_LABELS[call.status as keyof typeof CALL_STATUS_LABELS] || call.status}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground data-field">
-                            {call.caseNumber}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="border-0 shadow-sm">
+              <CardContent className="p-6">
+                <Skeleton className="h-4 w-24 mb-2" />
+                <Skeleton className="h-8 w-16" />
               </CardContent>
             </Card>
-          </div>
-
-          {/* Recent Notifications */}
-          <div>
-            <Card className="bg-card border-border/50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-blue-500" />
-                  Recent Alerts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!notifications || notifications.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No recent alerts</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {notifications.slice(0, 6).map((notif) => (
-                      <div
-                        key={notif.id}
-                        className={`p-3 rounded-lg border ${
-                          notif.isRead ? "border-border/30 bg-secondary/30" : "border-blue-500/30 bg-blue-500/5"
-                        }`}
-                      >
-                        <p className="text-sm font-medium text-foreground truncate">{notif.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">{notif.message}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1 data-field">
-                          {new Date(notif.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          ))}
         </div>
       </div>
-    </DashboardLayout>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 text-blue-900" />
+            Dashboard
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Department scheduling overview — {format(new Date(), "EEEE, MMMM d, yyyy")}
+          </p>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard
+          title="Total Officers"
+          value={stats?.totalOfficers ?? 0}
+          icon={Users}
+          color="bg-blue-900"
+          subtitle={`${stats?.activeOfficers ?? 0} active`}
+        />
+        <StatCard
+          title="Active Officers"
+          value={stats?.activeOfficers ?? 0}
+          icon={ShieldCheck}
+          color="bg-green-600"
+        />
+        <StatCard
+          title="Total Shifts"
+          value={stats?.totalShifts ?? 0}
+          icon={CalendarDays}
+          color="bg-indigo-600"
+        />
+        <StatCard
+          title="Shift Shortages"
+          value={stats?.shortageShifts ?? 0}
+          icon={AlertTriangle}
+          color={
+            (stats?.shortageShifts ?? 0) > 0 ? "bg-red-600" : "bg-gray-400"
+          }
+          subtitle={
+            (stats?.shortageShifts ?? 0) > 0 ? "Needs attention" : "All covered"
+          }
+        />
+        <StatCard
+          title="Pending PTO"
+          value={stats?.pendingPto ?? 0}
+          icon={UmbrellaOff}
+          color={
+            (stats?.pendingPto ?? 0) > 0 ? "bg-amber-500" : "bg-gray-400"
+          }
+          subtitle={
+            (stats?.pendingPto ?? 0) > 0 ? "Awaiting review" : "None pending"
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Shortage Alerts */}
+        {(stats?.recentShortages?.length ?? 0) > 0 && (
+          <Card className="border-0 shadow-sm bg-white border-l-4 border-l-red-500">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-red-700 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Shift Shortage Alerts
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {stats?.recentShortages.map((shift) => (
+                <div
+                  key={shift.id}
+                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">
+                      {shift.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {format(new Date(shift.date), "EEE, MMM d")} •{" "}
+                      {shift.startTime} – {shift.endTime}
+                    </p>
+                    {shift.unit && (
+                      <p className="text-xs text-gray-400">{shift.unit}</p>
+                    )}
+                  </div>
+                  <Badge variant="destructive" className="text-xs">
+                    Shortage
+                  </Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Upcoming Shifts */}
+        <Card className="border-0 shadow-sm bg-white">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-blue-900" />
+              Upcoming Shifts (Next 7 Days)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(stats?.upcomingShifts?.length ?? 0) === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">
+                No upcoming shifts scheduled
+              </p>
+            ) : (
+              stats?.upcomingShifts.map((shift) => (
+                <div
+                  key={shift.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">
+                      {shift.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {format(new Date(shift.date), "EEE, MMM d")} •{" "}
+                      {shift.startTime} – {shift.endTime}
+                    </p>
+                    {shift.unit && (
+                      <p className="text-xs text-gray-400">{shift.unit}</p>
+                    )}
+                  </div>
+                  <Badge
+                    variant={
+                      shift.status === "filled"
+                        ? "default"
+                        : shift.status === "shortage"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                    className="text-xs capitalize"
+                  >
+                    {shift.status}
+                  </Badge>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

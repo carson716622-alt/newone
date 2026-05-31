@@ -4,7 +4,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -26,33 +25,26 @@ import {
   LayoutDashboard,
   LogOut,
   PanelLeft,
-  Radio,
-  Shield,
-  Flame,
   Users,
-  Car,
-  AlertTriangle,
-  FileText,
-  Settings,
-  Bell,
+  CalendarDays,
+  UmbrellaOff,
+  ArrowLeftRight,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
-import { trpc } from "@/lib/trpc";
 import { Badge } from "./ui/badge";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", dept: "all" },
-  { icon: Radio, label: "Dispatch", path: "/dispatch", dept: "dispatch" },
-  { icon: Shield, label: "LEO Panel", path: "/leo", dept: "leo" },
-  { icon: Flame, label: "Fire/EMS", path: "/fire-ems", dept: "fire_ems" },
-  { icon: Users, label: "Unit Status", path: "/units", dept: "all" },
-  { icon: Car, label: "Citizens & Vehicles", path: "/citizens", dept: "all" },
-  { icon: AlertTriangle, label: "Warrants & BOLOs", path: "/warrants", dept: "all" },
-  { icon: FileText, label: "Reports", path: "/reports", dept: "all" },
-  { icon: Settings, label: "Admin", path: "/admin", dept: "admin" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: Users, label: "Officers", path: "/officers" },
+  { icon: CalendarDays, label: "Shifts", path: "/shifts" },
+  { icon: UmbrellaOff, label: "PTO Requests", path: "/pto" },
+  { icon: ArrowLeftRight, label: "Shift Swaps", path: "/swaps" },
+  { icon: Clock, label: "Overtime", path: "/overtime" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -81,17 +73,20 @@ export default function DashboardLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
+      <div
+        className="flex items-center justify-center min-h-screen"
+        style={{ background: "linear-gradient(135deg, #1a2744 0%, #0f1b35 100%)" }}
+      >
+        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full bg-white rounded-2xl shadow-2xl">
           <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-3">
-              <Shield className="h-10 w-10 text-blue-500" />
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                FiveM CAD
-              </h1>
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-900">
+              <ShieldCheck className="h-8 w-8 text-white" />
             </div>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Computer-Aided Dispatch & Records Management System. Sign in to access your department panel.
+            <h1 className="text-2xl font-bold tracking-tight text-center text-gray-900">
+              Police Scheduling System
+            </h1>
+            <p className="text-sm text-gray-500 text-center max-w-sm">
+              Authorized personnel only. Please sign in with your department credentials to access the scheduling system.
             </p>
           </div>
           <Button
@@ -99,9 +94,9 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all"
+            className="w-full bg-blue-900 hover:bg-blue-800 text-white shadow-lg"
           >
-            Sign In to CAD
+            Sign In to Continue
           </Button>
         </div>
       </div>
@@ -140,9 +135,6 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find((item) => item.path === location);
   const isMobile = useIsMobile();
-  const { data: unreadCount } = trpc.notifications.unreadCount.useQuery(undefined, {
-    refetchInterval: 15000,
-  });
 
   useEffect(() => {
     if (isCollapsed) {
@@ -160,18 +152,15 @@ function DashboardLayoutContent({
         setSidebarWidth(newWidth);
       }
     };
-
     const handleMouseUp = () => {
       setIsResizing(false);
     };
-
     if (isResizing) {
       document.addEventListener("mousemove", handleMouseMove);
       document.addEventListener("mouseup", handleMouseUp);
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
     }
-
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
@@ -180,67 +169,51 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
-  const userDept = (user as any)?.department || "leo";
-  const filteredMenuItems = menuItems.filter((item) => {
-    if (item.dept === "all") return true;
-    if ((user as any)?.role === "admin") return true;
-    return item.dept === userDept;
-  });
-
   return (
     <>
       <div className="relative" ref={sidebarRef}>
-        <Sidebar
-          collapsible="icon"
-          className="border-r border-border/50"
-          disableTransition={isResizing}
-        >
-          <SidebarHeader className="h-16 justify-center border-b border-border/50">
+        <Sidebar collapsible="icon" className="border-r bg-[#1a2744]" disableTransition={isResizing}>
+          <SidebarHeader className="h-16 justify-center border-b border-white/10">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-8 w-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors focus:outline-none shrink-0"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                <PanelLeft className="h-4 w-4 text-white/70" />
               </button>
-              {!isCollapsed ? (
+              {!isCollapsed && (
                 <div className="flex items-center gap-2 min-w-0">
-                  <Shield className="h-5 w-5 text-blue-500 shrink-0" />
-                  <span className="font-bold tracking-tight truncate text-foreground">
-                    FiveM CAD
+                  <ShieldCheck className="h-5 w-5 text-blue-300 shrink-0" />
+                  <span className="font-bold text-white tracking-tight truncate text-sm">
+                    PD Scheduler
                   </span>
                 </div>
-              ) : null}
+              )}
             </div>
           </SidebarHeader>
 
           <SidebarContent className="gap-0 py-2">
             <SidebarMenu className="px-2 py-1">
-              {filteredMenuItems.map((item) => {
-                const isActive = location === item.path;
-                const iconColor =
-                  item.dept === "leo"
-                    ? "text-blue-400"
-                    : item.dept === "fire_ems"
-                    ? "text-red-400"
-                    : item.dept === "dispatch"
-                    ? "text-amber-400"
-                    : item.dept === "admin"
-                    ? "text-purple-400"
-                    : "";
+              {menuItems.map((item) => {
+                const isActive =
+                  item.path === "/"
+                    ? location === "/"
+                    : location.startsWith(item.path);
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className={`h-10 transition-all font-normal text-white/70 hover:text-white hover:bg-white/10 ${
+                        isActive
+                          ? "bg-white/15 text-white font-medium"
+                          : ""
+                      }`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${
-                          isActive ? iconColor || "text-primary" : "text-muted-foreground"
-                        }`}
+                        className={`h-4 w-4 ${isActive ? "text-blue-300" : ""}`}
                       />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
@@ -250,34 +223,33 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-border/50">
+          <SidebarFooter className="p-3 border-t border-white/10">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border border-border shrink-0">
-                    <AvatarFallback className="text-xs font-medium bg-blue-600 text-white">
-                      {user?.name?.charAt(0).toUpperCase() || "U"}
+                <button className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/10 transition-colors w-full text-left focus:outline-none">
+                  <Avatar className="h-8 w-8 border border-white/20 shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-blue-700 text-white">
+                      {user?.name?.charAt(0).toUpperCase() ?? "U"}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none text-foreground">
-                      {user?.name || "Officer"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1">
-                      {(user as any)?.callsign || (user as any)?.badgeNumber || "No Callsign"}
-                    </p>
-                  </div>
+                  {!isCollapsed && (
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate leading-none text-white">
+                        {user?.name || "User"}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1 py-0 h-4 bg-blue-700/50 text-blue-200 border-0"
+                        >
+                          {user?.role === "admin" ? "Admin" : "Officer"}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => setLocation("/dashboard")}
-                  className="cursor-pointer"
-                >
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  <span>Dashboard</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -301,31 +273,21 @@ function DashboardLayoutContent({
         />
       </div>
 
-      <SidebarInset>
+      <SidebarInset className="bg-gray-50">
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <span className="tracking-tight text-foreground font-medium">
-                  {activeMenuItem?.label ?? "CAD"}
+          <div className="flex border-b h-14 items-center justify-between bg-white px-4 sticky top-0 z-40 shadow-sm">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="h-9 w-9 rounded-lg" />
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-blue-900" />
+                <span className="font-semibold text-gray-900">
+                  {activeMenuItem?.label ?? "PD Scheduler"}
                 </span>
               </div>
             </div>
-            <button
-              onClick={() => setLocation("/dashboard")}
-              className="relative p-2 hover:bg-accent rounded-lg"
-            >
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              {unreadCount && unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </button>
           </div>
         )}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-6">{children}</main>
       </SidebarInset>
     </>
   );
