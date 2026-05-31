@@ -7,6 +7,7 @@ import { shiftsRouter } from "./shiftsRouter";
 import { ptoRouter } from "./ptoRouter";
 import { swapsRouter } from "./swapsRouter";
 import { dashboardRouter } from "./dashboardRouter";
+import { mobileRouter } from "./mobileRouter";
 
 export const appRouter = router({
   system: systemRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   pto: ptoRouter,
   swaps: swapsRouter,
   dashboard: dashboardRouter,
+  mobile: mobileRouter,
 });
 
 export type AppRouter = typeof appRouter;

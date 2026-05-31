@@ -54,6 +54,7 @@ export const officers = mysqlTable("officers", {
     .default("active")
     .notNull(),
   maxWeeklyHours: int("maxWeeklyHours").default(40).notNull(),
+  passwordHash: varchar("passwordHash", { length: 256 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -61,18 +62,20 @@ export type Officer = typeof officers.$inferSelect;
 export type InsertOfficer = typeof officers.$inferInsert;
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
+// Shifts are permanent recurring templates (e.g. "Day Shift", "Night Watch").
+// Officers are assigned to these standing shifts; no date is stored on the shift itself.
 export const shifts = mysqlTable("shifts", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 128 }).notNull(),
-  date: date("date").notNull(),
   startTime: time("startTime").notNull(),
   endTime: time("endTime").notNull(),
+  daysOfWeek: varchar("daysOfWeek", { length: 64 }), // e.g. "Mon,Tue,Wed,Thu,Fri"
   unit: varchar("unit", { length: 128 }),
   location: varchar("location", { length: 256 }),
   minimumOfficers: int("minimumOfficers").default(1).notNull(),
   notes: text("notes"),
-  status: mysqlEnum("status", ["open", "filled", "shortage", "cancelled"])
-    .default("open")
+  status: mysqlEnum("status", ["active", "inactive"])
+    .default("active")
     .notNull(),
   createdBy: int("createdBy").references(() => users.id, {
     onDelete: "set null",
