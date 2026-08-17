@@ -27,17 +27,21 @@ py -m PyInstaller --noconfirm --clean --onefile --windowed --name FiveM-Room-Lig
 
 The executable is written to `dist\FiveM-Room-Light-Sync.exe`.
 
+## Refreshed interface
+
+The app now opens with a polished dark control center. First-time users are taken directly to a **three-step Guided Setup** that presents Govee and Philips Hue as separate provider cards, lets the user discover and select room lights through readable device cards, and provides clear scene controls for the emergency colors and brightness. The dashboard summarizes readiness, selected-light count, configured sync method, and the active emergency state. The FiveM Sync page explains direct companion setup in three plain-language steps and keeps the keybind fallback visible as an alternative.
+
 ## First-run setup
 
-Launch the executable and open **Setup & Lights**. Select the providers that the user owns, then connect each selected provider as described below.
+Launch the executable and use **Setup lights**. Select the providers that the user owns, then connect each selected provider as described below.
 
 | Provider | First-run connection | Light selection |
 | --- | --- | --- |
-| **Govee** | Enter a Govee Developer API key, then choose **Find Govee lights**. Create the key in the Govee Home app under Settings → Apply for API Key. [1] | Select one or more discovered Govee lights in the table. |
-| **Philips Hue** | Choose **Find Bridge** on the same network, or enter the Bridge IP address. Press the Bridge’s physical Link button, then choose **Pair Bridge**, and finally **Find Hue lights**. [2] | Select one or more discovered Hue lights in the same table. |
+| **Govee** | Enter a Govee Developer API key, then choose **Connect & find Govee lights**. Create the key in the Govee Home app under Settings → Apply for API Key. [1] | Check one or more discovered Govee device cards. |
+| **Philips Hue** | Choose **Find** on the same network, or enter the Bridge IP address. Press the Bridge’s physical Link button, then choose **Pair Bridge**, and finally **Find Hue lights**. [2] | Check one or more discovered Hue device cards. |
 | **Both** | Complete each applicable row. The application stores the providers independently and controls the combined selected-light list. | Choose any mix of Govee and Hue lights. |
 
-Choose two hex colors, configure brightness, select the participating lights, and choose **Save setup and start sync**. The default colors are police/emergency-style blue (`#0055FF`) and red (`#FF1A1A`).
+Choose two hex colors, configure brightness, select the participating lights, and choose **Save and continue to FiveM sync**. The default colors are police/emergency-style blue (`#0055FF`) and red (`#FF1A1A`).
 
 ## FiveM direct sync
 
