@@ -118,3 +118,6 @@ __pycache__/
 *.py[cod]
 *.spec
 apps/fivem-room-light-sync/dist-linux/
+
+# Windows packaging intermediates
+apps/fivem-room-light-sync/build-windows/
